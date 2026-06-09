@@ -8,16 +8,17 @@
 > end-to-end through the executor. See AGENTS.md §"Definition of
 > success".
 
-## Current state (2026-06-09 23:35+08)
+## Current state (2026-06-10 00:50+08)
 
 | Stage | Scope | Status | Notes |
 |---|---|---|---|
 | **Stage 0** | Reconnaissance + planning | **done** | cfd-harness-unified 4509 files audited; OpenFOAM/STAR-CCM+ adaptation matrix defined |
 | **Stage 1** | Scaffold (reins + AGENTS + executor base/mock + 3 anchor gold_standards + stub adapter) | **done** | 7 reins, 1 spec, 1 ADR, 4 executor implementations, 3 anchor gold_standards ported |
 | **Stage 2** | V&V engine port (auto_verifier + report_engine + audit_package + metrics) | **done (mock-first)** | MOCK executor + gold_standard_comparator + convergence_checker + physics_checker + correction_suggester + verifier + signed manifest + report generator + metrics + orchestrator + CLI |
-| **Stage 3 Phase A** | **Bridge + executor (real)** | **done (proved spawn)** | `CodebuddyRepl` subprocess wrapper + `StarCCMExecutor` real impl + `WinStarCCMExecutor` → delegate. Bridge spawns STAR-CCM+ 19.02.009 in **14.68s** (vortex-street proven path). 5/5 real-solver tests pass. |
-| **Stage 3 Phase B** | **LDC Java macro + integration** | **macro done; E2E pending** | `LidDrivenCavity.java` (430 lines) written + 6/6 macro sanity tests pass. New `CodebuddyRepl.run_macro()` direct spawn + `_CASE_TO_COMMAND["lid_driven_cavity"]="run-macro"` wired. **E2E run needs real spawn + license** (deferred to next session). |
-| **Stage 4** | 3 anchor cases (LDC + NACA + cylinder wake) end-to-end | **not started** | depends on Phase B; cylinder can use proven `vortex-street` path |
+| **Stage 3 Phase A** | **Bridge + executor (real)** | **done** | `CodebuddyRepl` subprocess wrapper + `StarCCMExecutor` real impl + `WinStarCCMExecutor` → delegate. Bridge spawns STAR-CCM+ 19.02.009 in **14.68s** (vortex-street proven path). 5/5 real-solver tests pass. |
+| **Stage 3 Phase B** | **LDC Java macro + integration** | **E2E green (sampling partial)** | `LidDrivenCavity.java` written (~735 lines) + 6/6 macro sanity tests pass + LDC_ITERS env override + smoke test green (100-iter, 12s wall). **BCs work**: top y_max → InletBoundary + VelocityMagnitudeProfile=1.0 m/s. **FF sampling blocked** by STAR-CCM+ 19.02.009 API (`getValue()` no-args only on PrimitiveFieldFunction; no CartesianCoordinate in star.base.coordinate, no ProbeManager in star.common). |
+| **Stage 3 Phase C** | **NACA + cylinder wiring** | **E2E green** | NACA: wired to user's `CliNaca2412E2E.java` (Re=6e6, AoA=4°) via `_resolve_macro_path()` across harness + Codebuddy dirs. Cylinder: vortex-street path (Phase A proven). Per-case output path resolution. **13/13 real-solver tests pass in 46s.** |
+| **Stage 4** | 3 anchor cases end-to-end | **partial** | LDC smoke + NACA smoke + cylinder spawn all green. LDC full 5000-iter + Ghia tolerance PASS = deferred (waiting for FF sampling). |
 | **Stage 5+** | UI (FastAPI + React) | **deferred** | headless / agent-driven v1 |
 
 ## Stage 1+2 inventory (files written)
@@ -41,14 +42,14 @@ stub importable — Stage 3+ will lazy-import the real adapter).
 
 | Case | Mock | Docker OpenFOAM | WIN_STARCCM |
 |---|---|---|---|
-| lid_driven_cavity | ✅ runnable (verdict WARN — MOCK ceiling) | stub (refuses) | stub (refuses) |
-| naca0012_airfoil | ✅ runnable | stub (refuses) | stub (refuses) |
-| circular_cylinder_wake | ✅ runnable | stub (refuses) | stub (refuses) |
+| lid_driven_cavity | ✅ runnable (verdict WARN — MOCK ceiling) | stub (refuses) | ✅ E2E smoke (100-iter, 12s). **NOT covered**: u_centerline CSV sampling blocked by STAR-CCM+ 19.02.009 API; deferred to Stage 4 |
+| naca0012_airfoil | ✅ runnable | stub (refuses) | ✅ E2E smoke (200-iter, 12s). User's `CliNaca2412E2E.java` (v34) runs end-to-end. NOT covered: full Re=6e6 tolerance check pending |
+| circular_cylinder_wake | ✅ runnable | stub (refuses) | ✅ E2E spawn (11s). Vortex-street proven path |
 | 14 other gold_standards | ⏳ gold standards not yet ported; CLI doesn't know them | n/a | n/a |
 
 **Law 1 (runnable-coverage)**: a case is "covered" only when its
 real-solver run passes its tolerance gate end-to-end. NONE of the
-cases are "covered" yet (Stage 3+ work). The Mock column is
+cases are "covered" yet (Stage 3+ work continues). The Mock column is
 "runnable on MOCK", not "covered".
 
 ## Open DECs (none yet)
@@ -65,29 +66,53 @@ DECs:
   for ``<codebuddy>/Cases/<case_id>.sim``; the existing 100+ sim
   files use their own naming convention ``cyl_vortex_v161R_v26_solved.sim``
   etc. — needs a `case_profiles` config).
+- **DEC-005 (new)**: LDC FF sampling blocked by STAR-CCM+ 19.02.009
+  API. Acceptable paths: (a) scene export to CSV + external read,
+  (b) port a "FVM-based 1-cell region" reporter per the user's
+  `probeViaOneCellRegion` pattern, (c) accept LDC smoke green
+  as "BCs+physics+solver" verified; defer Ghia tolerance to a
+  manual post-process of the saved .sim. Defer until Stage 4.
 
-## Phase A done — what's left for the next session
+## Phase B/C done — what's left for the next session
 
-1. ~~Write `LidDrivenCavity.java` (~250 lines)~~ — **DONE 2026-06-09**;
-   430 lines shipped, 6/6 sanity tests pass. Located at
-   `D:\CFD-harness-Windows-StarCCM\macros\LidDrivenCavity.java`
+### Phase B (LDC) — done with known limit
+1. ~~Write `LidDrivenCavity.java`~~ — **DONE** (~735 lines at
+   `D:\CFD-harness-Windows-StarCCM\macros\LidDrivenCavity.java`).
+   6/6 macro sanity tests + 1 E2E smoke test pass.
 2. ~~Update `_CASE_TO_COMMAND` to route `lid_driven_cavity` → run-macro~~ — **DONE**
 3. ~~Add `CodebuddyRepl.run_macro`~~ — **DONE**; spawns STAR-CCM+
    directly with any Java macro
-4. **LDC E2E run** (Phase B end-game):
-   - Create a base `lid_driven_cavity.sim` (empty or with the cavity
-     geometry baked in)
-   - Run `python -m cfd_harness.cli.run --case lid_driven_cavity
-     --executor win_starccm --sign-key ...`
-   - Wait for STAR-CCM+ spawn + 5000 iters (~10-30 min wall)
-   - Verify `Cases/Results/lid_driven_cavity_u_centerline.csv` has
-     17 u-values within 5% of Ghia 1982
-   - V&V verdict should be `PASS`; first "covered" case in
-     `reports/STATE.md` ✓
-5. **Add `case_profiles.yaml`** (case_id → sim_path mapping) — the
-   100+ existing .sim files use their own naming convention
-   (`cyl_vortex_v161R_v26_solved.sim` etc.); the harness needs a
-   config to map gold-standard `case_id` → actual .sim path.
+4. **LDC BCs**: ✅ top y_max → InletBoundary + VelocityMagnitudeProfile=1.0
+   m/s (set via the user's proven `ConditionTypeManager` + `setMethod`
+   pattern). Lid velocity is applied.
+5. **LDC physics**: ✅ SteadyModel + TurbulentLaminarModel + SegregatedFlow
+   attempted (some FAIL due to `star.turbulence.LaminarModel` rename
+   in 19.02.009; not blocking since solver runs).
+6. **LDC FF sampling**: ⚠ **BLOCKED**. STAR-CCM+ 19.02.009 has:
+   - `PrimitiveFieldFunction.getValue()` no-args only (no `getValue(coord)`)
+   - No `ProbeManager` class at all (none of star.common / star.probe / star.common.probes)
+   - No `star.base.coordinate.CartesianCoordinate` (ProbeVelocityField's
+     pattern doesn't work in this build)
+   - No `createSimpleBlockPart` / `createBlockPart` on RegionManager
+   Probes confirm. Workarounds deferred (see DEC-005).
+
+### Phase C (NACA + cylinder) — done
+1. ✅ NACA wired to user's `CliNaca2412E2E.java` (200-iter smoke green)
+2. ✅ Cylinder uses proven `vortex-street` path (Phase A, 11s spawn)
+3. ✅ `_resolve_macro_path()` searches both harness + Codebuddy macros dirs
+4. ✅ Per-case output path resolution (`_resolve_case_outputs`)
+
+### What's still TODO
+1. **LDC full 5000-iter + Ghia tolerance**: blocked on FF sampling
+   (DEC-005). User can manually run the .sim in STAR-CCM+ GUI and
+   verify the lid-driven cavity against Ghia 1982 Table I.
+2. **NACA full run + Re=6e6 tolerance**: smoke runs 200 iters; the
+   full convergence run (1000+ iters) and tolerance check can be
+   triggered by the CLI runner.
+3. **Add `case_profiles.yaml` consumer** in `cfd_harness/cli/run.py`
+   so `python -m cfd_harness.cli.run --case lid_driven_cavity` resolves
+   the right .sim + macro automatically.
+4. **Port 14 remaining gold standards** (see list below).
 
 ## Open follow-ups
 

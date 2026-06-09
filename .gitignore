@@ -86,3 +86,9 @@ naca_smoke.log
 naca_smoke2.log
 ldc_smoke*.log
 probe_*.log
+
+# Runtime CLI outputs (regenerated each run)
+cli_runner.out
+cli_runner.err
+reports/<case>/<timestamp>/data.json
+reports/<case>/<timestamp>/data.md

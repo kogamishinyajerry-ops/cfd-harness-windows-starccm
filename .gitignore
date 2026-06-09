@@ -67,3 +67,22 @@ fixtures/runs/*/real_incident_*.yaml
 .env
 .env.local
 *.local
+
+# Local LDC runner logs (ephemeral, regenerated on each run)
+ldc_full_run.err
+ldc_full_run.log
+ldc_full_runner.err
+ldc_full_runner.out
+ldc_smoke_runner.err
+ldc_smoke_runner.out
+ldc_5000_runner.err
+ldc_5000_runner.out
+all_anchor_smoke.log
+all_anchor_final.log
+all_anchor_final2.log
+main_tests.log
+main_tests_q.log
+naca_smoke.log
+naca_smoke2.log
+ldc_smoke*.log
+probe_*.log

@@ -1,8 +1,0 @@
-Starting executor.execute() ...
-status: ok
-notes: ['win_starccm_real_bridge_stage3plus', 'run_macro_ok:macro=LidDrivenCavity.java', 'run_macro_elapsed_s=11.66', 'csv=True,summary=True']
-exec.success: True
-exec.residuals: {}
-exec.key_quantities keys: ['u_centerline', '_macro_summary']
-u_centerline (first 5): [nan, nan, nan, nan, nan]
-_macro_summary: {'init_ok': True, 'run_ok': True, 'iters_requested': 2000, 'elapsed_sec': 0}

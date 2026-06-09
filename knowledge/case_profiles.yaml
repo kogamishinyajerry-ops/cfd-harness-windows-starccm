@@ -1,0 +1,60 @@
+# case_profiles.yaml · cfd-harness-windows-starccm
+#
+# Maps gold-standard case_id -> the actual .sim file path that
+# STAR-CCM+ should open for the case. Required because the user's
+# 100+ existing .sim files use their own naming convention
+# (cyl_vortex_v161R_v26_solved.sim etc.), NOT the gold-standard
+# case_id (circular_cylinder_wake, lid_driven_cavity, etc.).
+#
+# Stage 3+ resolvers use this file. Phase B LDC E2E creates the .sim
+# on the fly (via the LidDrivenCavity.java macro's step 1-2), so
+# the lid_driven_cavity entry can be a placeholder; Phase C NACA /
+# cylinder wake use existing solved .sim files.
+
+version: 1
+
+profiles:
+  # Phase B: lid_driven_cavity — STAR-CCM+ creates the cavity via the
+  # LidDrivenCavity.java macro (step 1-2); the path is just where
+  # STAR-CCM+ writes the .sim on save (step 10 of the macro).
+  lid_driven_cavity:
+    sim_path: "D:\\StarCCM Codebuddy\\Cases\\Results\\lid_driven_cavity_solved.sim"
+    sim_template: null  # macro creates geometry from scratch
+    macros: ["LidDrivenCavity.java"]
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\lid_driven_cavity_sim.log"
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\lid_driven_cavity_summary.json"
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\lid_driven_cavity_u_centerline.csv"
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\lid_driven_cavity_solved.sim"
+    # Defaults (the macro has these baked in; this is for the harness)
+    defaults:
+      size_m: 1.0
+      lid_u_m_s: 1.0
+      nu_m2_s: 0.01
+      mesh_nx: 129
+      mesh_ny: 129
+      iters: 5000
+
+  # Phase C: circular_cylinder_wake — use the user's existing solved
+  # cylinder .sim (vortex-street proven path). The CLI's vortex-street
+  # subcommand spawns STAR-CCM+ with VortexStreet.java; the executor
+  # picks this up via the existing _CASE_TO_COMMAND routing.
+  circular_cylinder_wake:
+    sim_path: "D:\\StarCCM Codebuddy\\Cases\\cyl_vortex_v161R_v26_solved.sim"
+    sim_template: "vortex-street"  # the CLI subcommand (proven ~11s)
+    macros: ["VortexStreet.java"]  # provided by the user's Codebuddy
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\cyl_vortex_summary.json"
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\cyl_vortex_force.png"
+
+  # Phase C: naca0012_airfoil — use the user's existing solved NACA
+  # .sim (the v34 final). The macro is CliNaca2412E2E.java (already
+  # proven by the user). The harness can re-run it with a fresh
+  # vortex / AoA if needed.
+  naca0012_airfoil:
+    sim_path: "D:\\StarCCM Codebuddy\\Cases\\Results\\naca2412_v34_final.sim"
+    sim_template: "naca-e2e"  # future Stage C subcommand
+    macros: ["CliNaca2412E2E.java"]
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\naca2412_force.txt"
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\naca2412_summary.json"

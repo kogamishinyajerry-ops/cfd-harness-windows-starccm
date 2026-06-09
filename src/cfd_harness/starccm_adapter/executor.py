@@ -186,10 +186,25 @@ class StarCCMExecutor(ExecutorAbc):
                             f"macro_not_found:{macro_path}",
                         ),
                     )
+                # For LDC: optionally override iters via env (smoke tests
+                # use 100-iter runs to validate step 1-7 before committing
+                # to the full 5000-iter run). The harness's CLI uses the
+                # default 5000 iters; the smoke-test E2E sets
+                # LDC_ITERS=100 explicitly.
+                ldc_env = None
+                if task_spec.case_id == "lid_driven_cavity":
+                    # We use the mesh_density as a hook: "mesh_20" → 200,
+                    # "mesh_40" → 500, "mesh_80" → 1000, "mesh_160" → 2000,
+                    # "default" → 5000. This lets the smoke test request
+                    # a fast run via a synthetic mesh_density.
+                    iters_map = {"mesh_20": 200, "mesh_40": 500, "mesh_80": 1000, "mesh_160": 2000}
+                    if task_spec.mesh_density in iters_map:
+                        ldc_env = {"LDC_ITERS": str(iters_map[task_spec.mesh_density])}
                 resp = repl.run_macro(
                     sim_path=str(sim_path),
                     macro_path=str(macro_path),
                     timeout_s=self._timeout_s,
+                    env=ldc_env,
                 )
             else:
                 # Fallback: just run the existing .sim

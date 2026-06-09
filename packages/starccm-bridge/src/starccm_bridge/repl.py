@@ -380,18 +380,14 @@ class CodebuddyRepl:
         macro_path: str,
         macro_args: str = "",
         timeout_s: int = 1800,
+        env: Optional[Dict[str, str]] = None,
     ) -> CodebuddyResponse:
-        """Spawn STAR-CCM+ directly with a Java macro (bypass the CLI).
+        """Spawn STAR-CCM+ directamente con un Java macro (bypass CLI).
 
         This is the canonical Stage 3+ path for case-specific
-        macros (eg. ``LidDrivenCavity.java``) that need to drive
-        the solver end-to-end. The CLI's ``run`` command is
-        thin (just ``--iters``); arbitrary macros need the
-        direct ``[bat, sim, -batch, macro]`` spawn pattern.
-
-        The macro's stdout is captured; the summary.json + CSV
-        + .sim that the macro writes to ``Cases/Results/`` are
-        picked up by the executor afterwards.
+        macros (eg. ``LidDrivenCavity.java``). The CLI's ``run``
+        command is thin (just ``--iters``); arbitrary macros need
+        the direct ``[bat, sim, -batch, macro]`` spawn pattern.
 
         Parameters
         ----------
@@ -402,11 +398,17 @@ class CodebuddyRepl:
             Absolute path to the Java macro file.
         macro_args : str
             Optional space-joined arg string passed to the
-            macro's ``getArgs()`` (v34 spawn order: appended
-            after the macro filename).
+            macro's ``getArgs()``. NOTE: STAR-CCM+ parses the
+            trailing args as CLI flags unless the macro is
+            invoked via -J-Dsystem.properties or env vars. Use
+            the ``env=`` parameter for smoke-test overrides.
         timeout_s : int
-            Per-spawn timeout. Default 30 min — complex LDC
-            runs with 5000 iters can take 10-20 min on Windows.
+            Per-spawn timeout. Default 30 min.
+        env : dict, optional
+            Extra environment variables to merge with the default
+            STAR-CCM+ spawn env (which already includes
+            ``JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8`` and
+            ``JAVAC_OPTIONS=-encoding UTF-8``).
         """
         starccm_bat = self.starccm_bat
         if starccm_bat is None or not starccm_bat.exists():
@@ -420,6 +422,63 @@ class CodebuddyRepl:
                 returncode=-1,
                 elapsed_s=0.0,
             )
+        cmd: List[str] = [str(starccm_bat), str(sim_path), "-batch", str(macro_path)]
+        if macro_args:
+            cmd.append(macro_args)
+        spawn_env = _make_env()
+        if env:
+            spawn_env.update(env)
+        t0 = time.monotonic()
+        try:
+            proc = subprocess.run(
+                cmd,
+                cwd=str(self.codebuddy_path),
+                env=spawn_env,
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as e:
+            elapsed = time.monotonic() - t0
+            raise CodebuddyError(
+                f"STAR-CCM+ spawn timed out after {timeout_s}s: macro={macro_path!r}",
+                response=CodebuddyResponse(
+                    ok=False,
+                    command=f"run_macro({Path(macro_path).name})",
+                    timestamp="",
+                    version="",
+                    data={},
+                    error=f"timeout after {timeout_s}s",
+                    returncode=-1,
+                    elapsed_s=elapsed,
+                    raw_stdout=e.stdout or "",
+                    raw_stderr=e.stderr or "",
+                ),
+            ) from e
+        elapsed = time.monotonic() - t0
+        ok = proc.returncode == 0
+        return CodebuddyResponse(
+            ok=ok,
+            command=f"run_macro({Path(macro_path).name})",
+            timestamp="",
+            version="",
+            data={
+                "sim_path": str(sim_path),
+                "macro_path": str(macro_path),
+                "starccm_bat": str(starccm_bat),
+                "returncode": proc.returncode,
+            },
+            error=(
+                None if ok
+                else f"STAR-CCM+ returned RC={proc.returncode}; "
+                     f"stderr_head={proc.stderr[:500]!r}"
+            ),
+            returncode=proc.returncode,
+            elapsed_s=elapsed,
+            raw_stdout=proc.stdout or "",
+            raw_stderr=proc.stderr or "",
+        )
         cmd: List[str] = [str(starccm_bat), str(sim_path), "-batch", str(macro_path)]
         if macro_args:
             cmd.append(macro_args)

@@ -61,16 +61,21 @@ _CASE_TO_COMMAND = {
     # the case-specific Java macro. The executor auto-resolves
     # the macro path under <harness_root>/macros/.
     "lid_driven_cavity": "run-macro",
-    # Phase C (NACA macro, TBD):
-    # "naca0012_airfoil": "run-macro",
+    # Phase C: NACA 2412 airfoil, using the user's proven
+    # CliNaca2412E2E.java (Re=6e6, AoA=4°). Lives in the user's
+    # Codebuddy/macros/ dir; we resolve via _resolve_macro_path().
+    "naca0012_airfoil": "run-macro",
 }
 
 
 # Default location of the harness-shipped Java macros. Each macro
 # filename must match a known case (eg. LidDrivenCavity.java for
-# the ``lid_driven_cavity`` case).
+# the ``lid_driven_cavity`` case). For cases that ship with the
+# user's Codebuddy (e.g. NACA), use the user's macro file name
+# so _resolve_macro_path can find it in <codebuddy>/macros/.
 _MACRO_NAME_FOR_CASE = {
     "lid_driven_cavity": "LidDrivenCavity.java",
+    "naca0012_airfoil": "CliNaca2412E2E.java",
 }
 
 
@@ -134,6 +139,31 @@ class StarCCMExecutor(ExecutorAbc):
                 return results
         return candidate
 
+    def _macros_search_dirs(self) -> list:
+        """Search dirs for case-specific Java macros.
+
+        Order:
+          1. The harness's own ``<harness_root>/macros/`` (LDC, future
+             cases we ship ourselves).
+          2. The user's Codebuddy ``<codebuddy>/macros/`` (NACA +
+             other proven macros the user has built over v15-v34).
+        """
+        dirs: list = [Path(self._macros_dir)]
+        cb = Path(self._codebuddy_path or _DEFAULT_CODEBUDDY_PATH) / "macros"
+        if cb != Path(self._macros_dir):
+            dirs.append(cb)
+        return dirs
+
+    def _resolve_macro_path(self, macro_name: str) -> Path | None:
+        """Locate ``macro_name`` across the harness + user Codebuddy
+        macros dirs. Returns ``None`` if not found anywhere.
+        """
+        for d in self._macros_search_dirs():
+            p = d / macro_name
+            if p.exists():
+                return p
+        return None
+
     def execute(self, task_spec: TaskSpec) -> RunReport:
         sim_path = self._resolve_sim(task_spec.case_id)
         if not sim_path.exists():
@@ -173,8 +203,8 @@ class StarCCMExecutor(ExecutorAbc):
                             f"no_macro_for_case:{task_spec.case_id}",
                         ),
                     )
-                macro_path = Path(self._macros_dir) / macro_name
-                if not macro_path.exists():
+                macro_path = self._resolve_macro_path(macro_name)
+                if macro_path is None:
                     return RunReport(
                         mode=self.MODE,
                         status=ExecutorStatus.MODE_NOT_APPLICABLE,
@@ -183,7 +213,8 @@ class StarCCMExecutor(ExecutorAbc):
                         execution_result=None,
                         notes=(
                             self._REAL_NOTE,
-                            f"macro_not_found:{macro_path}",
+                            f"macro_not_found:{macro_name}",
+                            f"search_dirs={self._macros_search_dirs()}",
                         ),
                     )
                 # For LDC: optionally override iters via env (smoke tests
@@ -350,12 +381,18 @@ class StarCCMExecutor(ExecutorAbc):
                 ),
             )
 
-        # Read the CSV + summary.json that the macro wrote
+        # Read the CSV + summary.json that the macro wrote.
+        # Different cases use different naming conventions — resolve
+        # the right paths per case. NACA's user macro writes
+        # ``naca2412_log.txt`` and ``naca2412_summary.json``; LDC's
+        # macro writes ``lid_driven_cavity_sim.log`` +
+        # ``lid_driven_cavity_summary.json`` + ``_u_centerline.csv``.
         results_dir = Path(self._codebuddy_path or _DEFAULT_CODEBUDDY_PATH) / "Cases" / "Results"
-        csv_path = results_dir / f"{task_spec.case_id}_u_centerline.csv"
-        summary_path = results_dir / f"{task_spec.case_id}_summary.json"
-        log_path = results_dir / f"{task_spec.case_id}_sim.log"
-        sim_out = results_dir / f"{task_spec.case_id}_solved.sim"
+        case_out = self._resolve_case_outputs(task_spec.case_id, results_dir)
+        csv_path = case_out["csv"]
+        summary_path = case_out["summary"]
+        log_path = case_out["log"]
+        sim_out = case_out["sim"]
 
         # Parse CSV → key_quantities["u_centerline"] = [list of 17 floats]
         key_quantities: dict = {}
@@ -406,7 +443,7 @@ class StarCCMExecutor(ExecutorAbc):
         raw_output = str(sim_out) if sim_out.exists() else str(sim_path)
 
         result = ExecutionResult(
-            success=bool(key_quantities.get("u_centerline")),  # success iff CSV parseable
+            success=bool(key_quantities.get("u_centerline")) or bool(key_quantities.get("_macro_summary")),
             is_mock=False,
             residuals=residuals,
             key_quantities=key_quantities,
@@ -426,3 +463,32 @@ class StarCCMExecutor(ExecutorAbc):
                 f"csv={csv_path.exists()},summary={summary_path.exists()}",
             ),
         )
+
+    def _resolve_case_outputs(self, case_id: str, results_dir: Path) -> dict:
+        """Map ``case_id`` to its expected macro output filenames.
+
+        LDC: lid_driven_cavity_sim.log + _summary.json + _u_centerline.csv
+        NACA: naca2412_log.txt + naca2412_summary.json (user macro names)
+        Other: placeholder via case_id.
+        """
+        if case_id == "lid_driven_cavity":
+            return {
+                "log": results_dir / "lid_driven_cavity_sim.log",
+                "summary": results_dir / "lid_driven_cavity_summary.json",
+                "csv": results_dir / "lid_driven_cavity_u_centerline.csv",
+                "sim": results_dir / "lid_driven_cavity_solved.sim",
+            }
+        if case_id == "naca0012_airfoil":
+            return {
+                "log": results_dir / "naca2412_log.txt",
+                "summary": results_dir / "naca2412_summary.json",
+                "csv": results_dir / "naca2412_u_centerline.csv",  # not produced by user macro
+                "sim": results_dir / "naca2412_v34_final.sim",
+            }
+        # Default placeholder
+        return {
+            "log": results_dir / f"{case_id}_sim.log",
+            "summary": results_dir / f"{case_id}_summary.json",
+            "csv": results_dir / f"{case_id}_u_centerline.csv",
+            "sim": results_dir / f"{case_id}_solved.sim",
+        }

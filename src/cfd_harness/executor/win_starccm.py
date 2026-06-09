@@ -45,10 +45,12 @@ class WinStarCCMExecutor(ExecutorAbc):
         self,
         codebuddy_path: Optional[str] = None,
         sim_root: Optional[str] = None,
+        macros_dir: Optional[str] = None,
         timeout_s: int = 600,
     ) -> None:
         self._codebuddy_path = codebuddy_path
         self._sim_root = sim_root
+        self._macros_dir = macros_dir
         self._timeout_s = timeout_s
         self._delegate = None  # lazy
 
@@ -66,6 +68,7 @@ class WinStarCCMExecutor(ExecutorAbc):
             self._delegate = StarCCMExecutor(
                 codebuddy_path=self._codebuddy_path,
                 sim_root=self._sim_root,
+                macros_dir=self._macros_dir,
                 timeout_s=self._timeout_s,
             )
         return self._delegate

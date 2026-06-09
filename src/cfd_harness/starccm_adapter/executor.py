@@ -57,9 +57,20 @@ _DEFAULT_CODEBUDDY_PATH = r"D:\StarCCM Codebuddy"
 # ``run --iters`` which depends on a pre-existing solved .sim.
 _CASE_TO_COMMAND = {
     "circular_cylinder_wake": "vortex-street",
-    # Phase B (LidDrivenCavity.java) and Phase C (NACA) will add:
-    # "lid_driven_cavity": "pipeline",
-    # "naca0012_airfoil": "pipeline",
+    # Phase B (LidDrivenCavity.java) - direct STAR-CCM+ spawn with
+    # the case-specific Java macro. The executor auto-resolves
+    # the macro path under <harness_root>/macros/.
+    "lid_driven_cavity": "run-macro",
+    # Phase C (NACA macro, TBD):
+    # "naca0012_airfoil": "run-macro",
+}
+
+
+# Default location of the harness-shipped Java macros. Each macro
+# filename must match a known case (eg. LidDrivenCavity.java for
+# the ``lid_driven_cavity`` case).
+_MACRO_NAME_FOR_CASE = {
+    "lid_driven_cavity": "LidDrivenCavity.java",
 }
 
 
@@ -79,10 +90,17 @@ class StarCCMExecutor(ExecutorAbc):
         self,
         codebuddy_path: Optional[str] = None,
         sim_root: Optional[str] = None,
+        macros_dir: Optional[str] = None,
         timeout_s: int = 600,
     ) -> None:
         self._codebuddy_path = codebuddy_path
         self._sim_root = sim_root
+        # Default macros dir: <harness_root>/macros/
+        if macros_dir is None:
+            # src/cfd_harness/starccm_adapter/executor.py → ../../../../macros
+            harness_root = Path(__file__).resolve().parent.parent.parent.parent
+            macros_dir = str(harness_root / "macros")
+        self._macros_dir = macros_dir
         self._timeout_s = timeout_s
         self._repl = None  # lazy
 
@@ -138,6 +156,41 @@ class StarCCMExecutor(ExecutorAbc):
             repl = self._get_repl()
             if cmd_name == "vortex-street":
                 resp = repl.vortex_street(sim_path=str(sim_path), timeout_s=self._timeout_s)
+            elif cmd_name == "run-macro":
+                # Stage 3 Phase B: spawn STAR-CCM+ directly with the
+                # case-specific Java macro (bypassing the CLI's
+                # ``run`` which is too thin for LDC).
+                macro_name = _MACRO_NAME_FOR_CASE.get(task_spec.case_id)
+                if macro_name is None:
+                    return RunReport(
+                        mode=self.MODE,
+                        status=ExecutorStatus.MODE_NOT_APPLICABLE,
+                        contract_hash=self.contract_hash,
+                        version=self.VERSION,
+                        execution_result=None,
+                        notes=(
+                            self._REAL_NOTE,
+                            f"no_macro_for_case:{task_spec.case_id}",
+                        ),
+                    )
+                macro_path = Path(self._macros_dir) / macro_name
+                if not macro_path.exists():
+                    return RunReport(
+                        mode=self.MODE,
+                        status=ExecutorStatus.MODE_NOT_APPLICABLE,
+                        contract_hash=self.contract_hash,
+                        version=self.VERSION,
+                        execution_result=None,
+                        notes=(
+                            self._REAL_NOTE,
+                            f"macro_not_found:{macro_path}",
+                        ),
+                    )
+                resp = repl.run_macro(
+                    sim_path=str(sim_path),
+                    macro_path=str(macro_path),
+                    timeout_s=self._timeout_s,
+                )
             else:
                 # Fallback: just run the existing .sim
                 iters = self._mesh_density_to_iters(task_spec.mesh_density)
@@ -154,6 +207,12 @@ class StarCCMExecutor(ExecutorAbc):
                     f"codebuddy_bridge_failed:{type(e).__name__}:{e}",
                 ),
             )
+
+        # For run-macro, the executor's post-processing reads the
+        # macro's output files (CSV + summary.json) into
+        # residuals + key_quantities.
+        if cmd_name == "run-macro":
+            return self._build_macro_run_report(resp, sim_path, task_spec)
 
         return self._build_run_report(resp, sim_path)
 
@@ -249,3 +308,106 @@ class StarCCMExecutor(ExecutorAbc):
             "mesh_80": 1000,
             "mesh_160": 2000,
         }.get(mesh_density, 500)
+
+    def _build_macro_run_report(
+        self, resp, sim_path: Path, task_spec: TaskSpec
+    ) -> RunReport:
+        """Build a RunReport for a run-macro invocation.
+
+        For case-specific Java macros, the success criteria is:
+          1. STAR-CCM+ returned RC=0 (resp.ok)
+          2. The macro's output file (CSV) was written and parseable
+
+        The CSV is read into ``key_quantities[<case_quantity>]``
+        and the summary.json is read for ``residuals`` if present.
+        """
+        if not resp.ok:
+            return RunReport(
+                mode=self.MODE,
+                status=ExecutorStatus.MODE_NOT_YET_IMPLEMENTED,
+                contract_hash=self.contract_hash,
+                version=self.VERSION,
+                execution_result=None,
+                notes=(
+                    self._REAL_NOTE,
+                    f"run_macro_failed:command={resp.command}",
+                    f"run_macro_error={resp.error!r}",
+                ),
+            )
+
+        # Read the CSV + summary.json that the macro wrote
+        results_dir = Path(self._codebuddy_path or _DEFAULT_CODEBUDDY_PATH) / "Cases" / "Results"
+        csv_path = results_dir / f"{task_spec.case_id}_u_centerline.csv"
+        summary_path = results_dir / f"{task_spec.case_id}_summary.json"
+        log_path = results_dir / f"{task_spec.case_id}_sim.log"
+        sim_out = results_dir / f"{task_spec.case_id}_solved.sim"
+
+        # Parse CSV → key_quantities["u_centerline"] = [list of 17 floats]
+        key_quantities: dict = {}
+        if csv_path.exists():
+            try:
+                with csv_path.open(encoding="utf-8") as f:
+                    lines = [ln for ln in f.read().splitlines() if ln and not ln.startswith("#")]
+                # Skip header; remaining lines are "y,u" pairs
+                u_vals: List[float] = []
+                for ln in lines[1:]:
+                    parts = ln.split(",")
+                    if len(parts) >= 2:
+                        try:
+                            u_vals.append(float(parts[1]))
+                        except ValueError:
+                            pass
+                if u_vals:
+                    key_quantities["u_centerline"] = u_vals
+            except Exception as e:
+                key_quantities["csv_parse_error"] = str(e)
+        else:
+            key_quantities["csv_not_found"] = str(csv_path)
+
+        # Parse summary.json → residuals (if macro reports them)
+        residuals: dict = {}
+        if summary_path.exists():
+            try:
+                import json as _json
+                with summary_path.open(encoding="utf-8") as f:
+                    summary = _json.load(f)
+                # Macros may report residuals under any reasonable key
+                for k in ("residuals", "final_residuals", "iter_residuals"):
+                    if isinstance(summary.get(k), dict):
+                        residuals.update({str(kk): float(vv) for kk, vv in summary[k].items() if vv is not None})
+                # Also extract run_ok + init_ok for diagnostics
+                key_quantities["_macro_summary"] = {
+                    "init_ok": summary.get("init_ok"),
+                    "run_ok": summary.get("run_ok"),
+                    "iters_requested": summary.get("iters_requested"),
+                    "elapsed_sec": summary.get("elapsed_sec"),
+                }
+            except Exception as e:
+                key_quantities["summary_parse_error"] = str(e)
+
+        # Resolve the actual saved .sim path (the harness checks
+        # raw_output_path.exists() downstream; if the macro didn't
+        # save, that's a fatal but recoverable error).
+        raw_output = str(sim_out) if sim_out.exists() else str(sim_path)
+
+        result = ExecutionResult(
+            success=bool(key_quantities.get("u_centerline")),  # success iff CSV parseable
+            is_mock=False,
+            residuals=residuals,
+            key_quantities=key_quantities,
+            execution_time_s=resp.elapsed_s,
+            raw_output_path=Path(raw_output),
+        )
+        return RunReport(
+            mode=self.MODE,
+            status=ExecutorStatus.OK,
+            contract_hash=self.contract_hash,
+            version=self.VERSION,
+            execution_result=result,
+            notes=(
+                self._REAL_NOTE,
+                f"run_macro_ok:macro={Path(resp.data.get('macro_path','')).name}",
+                f"run_macro_elapsed_s={resp.elapsed_s:.2f}",
+                f"csv={csv_path.exists()},summary={summary_path.exists()}",
+            ),
+        )

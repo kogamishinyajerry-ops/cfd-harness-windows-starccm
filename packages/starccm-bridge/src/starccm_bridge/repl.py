@@ -374,6 +374,111 @@ class CodebuddyRepl:
             args.extend(["--out", out_csv])
         return self._invoke("export-field", args, timeout_s=timeout_s)
 
+    def run_macro(
+        self,
+        sim_path: str,
+        macro_path: str,
+        macro_args: str = "",
+        timeout_s: int = 1800,
+    ) -> CodebuddyResponse:
+        """Spawn STAR-CCM+ directly with a Java macro (bypass the CLI).
+
+        This is the canonical Stage 3+ path for case-specific
+        macros (eg. ``LidDrivenCavity.java``) that need to drive
+        the solver end-to-end. The CLI's ``run`` command is
+        thin (just ``--iters``); arbitrary macros need the
+        direct ``[bat, sim, -batch, macro]`` spawn pattern.
+
+        The macro's stdout is captured; the summary.json + CSV
+        + .sim that the macro writes to ``Cases/Results/`` are
+        picked up by the executor afterwards.
+
+        Parameters
+        ----------
+        sim_path : str
+            Path to a (possibly empty) .sim file. STAR-CCM+ will
+            open / create this file before running the macro.
+        macro_path : str
+            Absolute path to the Java macro file.
+        macro_args : str
+            Optional space-joined arg string passed to the
+            macro's ``getArgs()`` (v34 spawn order: appended
+            after the macro filename).
+        timeout_s : int
+            Per-spawn timeout. Default 30 min — complex LDC
+            runs with 5000 iters can take 10-20 min on Windows.
+        """
+        starccm_bat = self.starccm_bat
+        if starccm_bat is None or not starccm_bat.exists():
+            return CodebuddyResponse(
+                ok=False,
+                command=f"run_macro({Path(macro_path).name})",
+                timestamp="",
+                version="",
+                data={},
+                error=f"starccm+.bat not found in C:\\Program Files\\Siemens",
+                returncode=-1,
+                elapsed_s=0.0,
+            )
+        cmd: List[str] = [str(starccm_bat), str(sim_path), "-batch", str(macro_path)]
+        if macro_args:
+            cmd.append(macro_args)
+        t0 = time.monotonic()
+        try:
+            proc = subprocess.run(
+                cmd,
+                cwd=str(self.codebuddy_path),
+                env=_make_env(),
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as e:
+            elapsed = time.monotonic() - t0
+            raise CodebuddyError(
+                f"STAR-CCM+ spawn timed out after {timeout_s}s: macro={macro_path!r}",
+                response=CodebuddyResponse(
+                    ok=False,
+                    command=f"run_macro({Path(macro_path).name})",
+                    timestamp="",
+                    version="",
+                    data={},
+                    error=f"timeout after {timeout_s}s",
+                    returncode=-1,
+                    elapsed_s=elapsed,
+                    raw_stdout=e.stdout or "",
+                    raw_stderr=e.stderr or "",
+                ),
+            ) from e
+        elapsed = time.monotonic() - t0
+        # The macro's stdout is just text (no JSON). We mark this
+        # call as ok if STAR-CCM+ returned RC=0. The real verdict
+        # is in the macro's ``<Results>/<case>_summary.json`` file,
+        # which the executor picks up.
+        ok = proc.returncode == 0
+        return CodebuddyResponse(
+            ok=ok,
+            command=f"run_macro({Path(macro_path).name})",
+            timestamp="",
+            version="",
+            data={
+                "sim_path": str(sim_path),
+                "macro_path": str(macro_path),
+                "starccm_bat": str(starccm_bat),
+                "returncode": proc.returncode,
+            },
+            error=(
+                None if ok
+                else f"STAR-CCM+ returned RC={proc.returncode}; "
+                     f"stderr_head={proc.stderr[:500]!r}"
+            ),
+            returncode=proc.returncode,
+            elapsed_s=elapsed,
+            raw_stdout=proc.stdout or "",
+            raw_stderr=proc.stderr or "",
+        )
+
     # ----- raw escape hatch -----
     def send_command(
         self,

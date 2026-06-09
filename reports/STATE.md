@@ -16,7 +16,7 @@
 | **Stage 1** | Scaffold (reins + AGENTS + executor base/mock + 3 anchor gold_standards + stub adapter) | **done** | 7 reins, 1 spec, 1 ADR, 4 executor implementations, 3 anchor gold_standards ported |
 | **Stage 2** | V&V engine port (auto_verifier + report_engine + audit_package + metrics) | **done (mock-first)** | MOCK executor + gold_standard_comparator + convergence_checker + physics_checker + correction_suggester + verifier + signed manifest + report generator + metrics + orchestrator + CLI |
 | **Stage 3 Phase A** | **Bridge + executor (real)** | **done (proved spawn)** | `CodebuddyRepl` subprocess wrapper + `StarCCMExecutor` real impl + `WinStarCCMExecutor` → delegate. Bridge spawns STAR-CCM+ 19.02.009 in **14.68s** (vortex-street proven path). 5/5 real-solver tests pass. |
-| **Stage 3 Phase B** | **LDC E2E (Java macro)** | **not started** | `LidDrivenCavity.java` ~250 lines; based on `CliNaca2412E2E.java` pattern. Needs the new macro + a base LDC sim file. |
+| **Stage 3 Phase B** | **LDC Java macro + integration** | **macro done; E2E pending** | `LidDrivenCavity.java` (430 lines) written + 6/6 macro sanity tests pass. New `CodebuddyRepl.run_macro()` direct spawn + `_CASE_TO_COMMAND["lid_driven_cavity"]="run-macro"` wired. **E2E run needs real spawn + license** (deferred to next session). |
 | **Stage 4** | 3 anchor cases (LDC + NACA + cylinder wake) end-to-end | **not started** | depends on Phase B; cylinder can use proven `vortex-street` path |
 | **Stage 5+** | UI (FastAPI + React) | **deferred** | headless / agent-driven v1 |
 
@@ -68,24 +68,26 @@ DECs:
 
 ## Phase A done — what's left for the next session
 
-1. Write `LidDrivenCavity.java` (~250 lines) — modeled on
-   `CliNaca2412E2E.java`:
-   - Step 1: 2D square cavity geometry (1m × 1m) via STAR-CCM+'s
-     plane-2D CAD or a 2D block mesh primitive
-   - Step 2: structured mesh 129×129 (Ghia 1982 reference mesh)
-   - Step 3: BCs — top wall Ux=1, other walls no-slip
-   - Step 4: enable laminar segregated SIMPLE solver
-   - Step 5: initialize + run 5000 iters
-   - Step 6: export u_centerline at 17 Ghia points
-   - Step 7: save .sim + log
-2. Update `_CASE_TO_COMMAND` in
-   `src/cfd_harness/starccm_adapter/executor.py` to route
-   `lid_driven_cavity` → `pipeline` command.
-3. Add `case_profiles.yaml` (or per-gold-standard `sim_path` field)
-   for the case_id → sim_path mapping.
-4. LDC E2E run; verify gold standard tolerance PASS (u_centerline
-   relative error ≤ 5%); mark first "covered" case in the covered
-   map.
+1. ~~Write `LidDrivenCavity.java` (~250 lines)~~ — **DONE 2026-06-09**;
+   430 lines shipped, 6/6 sanity tests pass. Located at
+   `D:\CFD-harness-Windows-StarCCM\macros\LidDrivenCavity.java`
+2. ~~Update `_CASE_TO_COMMAND` to route `lid_driven_cavity` → run-macro~~ — **DONE**
+3. ~~Add `CodebuddyRepl.run_macro`~~ — **DONE**; spawns STAR-CCM+
+   directly with any Java macro
+4. **LDC E2E run** (Phase B end-game):
+   - Create a base `lid_driven_cavity.sim` (empty or with the cavity
+     geometry baked in)
+   - Run `python -m cfd_harness.cli.run --case lid_driven_cavity
+     --executor win_starccm --sign-key ...`
+   - Wait for STAR-CCM+ spawn + 5000 iters (~10-30 min wall)
+   - Verify `Cases/Results/lid_driven_cavity_u_centerline.csv` has
+     17 u-values within 5% of Ghia 1982
+   - V&V verdict should be `PASS`; first "covered" case in
+     `reports/STATE.md` ✓
+5. **Add `case_profiles.yaml`** (case_id → sim_path mapping) — the
+   100+ existing .sim files use their own naming convention
+   (`cyl_vortex_v161R_v26_solved.sim` etc.); the harness needs a
+   config to map gold-standard `case_id` → actual .sim path.
 
 ## Open follow-ups
 

@@ -1,18 +1,21 @@
 """starccm-bridge: subprocess wrapper for the user's Codebuddy REPL.
 
-Plane: ADAPTER_STARCCM (separate sub-package to keep the
-`cfd_harness.starccm_adapter` package importable on a fresh venv
-without the bridge).
+Plane: ADAPTER_STARCCM (separate sub-package to keep
+``cfd_harness.starccm_adapter`` importable on a fresh venv without
+the bridge).
 
-The bridge calls `D:\\StarCCM Codebuddy\\starccm_cli_repl.py` (a
-script the user has at v34, 1686 tests). We DO NOT re-implement the
-CLI; we wrap it. The Repl accepts commands over stdin and returns
-JSON over stdout — we send a command like `mesh_pipeline
---input <case.json> --output <out_dir>` and parse the response.
+The bridge calls ``D:\\StarCCM Codebuddy\\starccm_cli.py`` (the user's
+existing CLI, v15+ as of 2026-06-09). We DO NOT re-implement the
+CLI; we wrap it. The CLI accepts one command per subprocess call and
+returns a uniform JSON schema::
+
+    {ok, command, timestamp, version, data, error}
+
+Public surface (re-exported here for ``from starccm_bridge import ...``):
+  - CodebuddyRepl: subprocess wrapper
+  - CodebuddyResponse: the typed response
+  - CodebuddyError: raised on structured errors
 """
-# Stage 3+ re-exports (currently the module is a stub):
-# from starccm_bridge.repl import CodebuddyRepl, ReplResponse
-# from starccm_bridge.session import Session
-# from starccm_bridge.error_parser import parse_error
+from starccm_bridge.repl import CodebuddyError, CodebuddyRepl, CodebuddyResponse
 
-__all__: list = []
+__all__ = ["CodebuddyRepl", "CodebuddyResponse", "CodebuddyError"]

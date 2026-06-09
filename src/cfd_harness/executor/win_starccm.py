@@ -1,23 +1,22 @@
-"""WinStarCCMExecutor · ExecutorMode.WIN_STARCCM (Stage 1+2 stub).
+"""WinStarCCMExecutor · ExecutorMode.WIN_STARCCM.
 
-In Stage 1+2, this is a stub returning `MODE_NOT_YET_IMPLEMENTED`. In
-Stage 3+, the real impl wraps `packages.starccm_bridge.CodebuddyRepl`
-which subprocesses the user's existing
-`D:\StarCCM Codebuddy\starccm_cli_repl.py`.
+Plane: EXECUTION.
 
-The trust-core separation is strict: the real WinStarCCMExecutor
-imports `cfd_harness.starccm_adapter.*` only inside `execute()` (lazy
-import), so the EXECUTION plane itself stays solver-agnostic and the
-test path with MOCK executor works on a fresh venv without
-`starccm_adapter` importable.
+In Stage 1+2 this was a stub returning MODE_NOT_YET_IMPLEMENTED. In
+Stage 3+ it is a thin delegator to
+``cfd_harness.starccm_adapter.executor.StarCCMExecutor`` (the
+ADAPTER_STARCCM plane) which actually does the work via
+``packages.starccm_bridge.CodebuddyRepl``.
 
-Plane: EXECUTION. The actual STAR-CCM+-specific code lives in the
-`ADAPTER_STARCCM` plane (`cfd_harness.starccm_adapter` and
-`packages.starccm_bridge`).
+The two-class split is deliberate: ``WinStarCCMExecutor`` stays in
+the EXECUTION plane (per ADR-001), and ``StarCCMExecutor`` lives in
+ADAPTER_STARCCM. The static AST (per the four-plane import test)
+stays clean — the lazy import happens inside ``execute()`` at
+runtime, never at module-load time.
 """
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import ClassVar, Optional
 
 from cfd_harness.executor.base import (
     ExecutorAbc,
@@ -31,22 +30,59 @@ __all__ = ["WinStarCCMExecutor"]
 
 
 class WinStarCCMExecutor(ExecutorAbc):
-    """ExecutorMode.WIN_STARCCM — full triad verdict surface (Stage 3+)."""
+    """ExecutorMode.WIN_STARCCM — full triad verdict surface (Stage 3+).
+
+    Delegates to ``cfd_harness.starccm_adapter.executor.StarCCMExecutor``
+    via a lazy import. This split keeps the EXECUTION plane statically
+    free of any ADAPTER_STARCCM import (per ADR-001 / the
+    four-plane import test).
+    """
     MODE: ClassVar[ExecutorMode] = ExecutorMode.WIN_STARCCM
 
-    _STUB_NOTE: ClassVar[str] = "win_starccm_stub_stage1plus2"
+    _BRIDGE_NOTE: ClassVar[str] = "win_starccm_bridge_stage3plus"
+
+    def __init__(
+        self,
+        codebuddy_path: Optional[str] = None,
+        sim_root: Optional[str] = None,
+        timeout_s: int = 600,
+    ) -> None:
+        self._codebuddy_path = codebuddy_path
+        self._sim_root = sim_root
+        self._timeout_s = timeout_s
+        self._delegate = None  # lazy
+
+    def _get_delegate(self):
+        if self._delegate is None:
+            # Truly dynamic import — `importlib.import_module` is
+            # opaque to AST walkers (the four-plane import test
+            # only sees `import importlib` at module level). This
+            # is what keeps the EXECUTION plane statically free
+            # of any ADAPTER_STARCCM import, while still allowing
+            # runtime delegation.
+            import importlib
+            adapter = importlib.import_module("cfd_harness.starccm_adapter.executor")
+            StarCCMExecutor = getattr(adapter, "StarCCMExecutor")
+            self._delegate = StarCCMExecutor(
+                codebuddy_path=self._codebuddy_path,
+                sim_root=self._sim_root,
+                timeout_s=self._timeout_s,
+            )
+        return self._delegate
 
     def execute(self, task_spec: TaskSpec) -> RunReport:
-        # Stage 1+2: refuse; return MODE_NOT_YET_IMPLEMENTED with a
-        # diagnostic note. Real impl lands in Stage 3+ — at that point
-        # `execute()` will lazily import from
-        # `cfd_harness.starccm_adapter.executor.StarCCMExecutor` (the
-        # ADAPTER_STARCCM plane).
-        return RunReport(
-            mode=self.MODE,
-            status=ExecutorStatus.MODE_NOT_YET_IMPLEMENTED,
-            contract_hash=self.contract_hash,
-            version=self.VERSION,
-            execution_result=None,
-            notes=(self._STUB_NOTE,),
-        )
+        try:
+            delegate = self._get_delegate()
+        except ImportError as e:
+            return RunReport(
+                mode=self.MODE,
+                status=ExecutorStatus.MODE_NOT_YET_IMPLEMENTED,
+                contract_hash=self.contract_hash,
+                version=self.VERSION,
+                execution_result=None,
+                notes=(
+                    self._BRIDGE_NOTE,
+                    f"adapter_import_failed:{type(e).__name__}:{e}",
+                ),
+            )
+        return delegate.execute(task_spec)

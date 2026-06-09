@@ -8,15 +8,16 @@
 > end-to-end through the executor. See AGENTS.md §"Definition of
 > success".
 
-## Current state (2026-06-09 22:30+08)
+## Current state (2026-06-09 23:35+08)
 
 | Stage | Scope | Status | Notes |
 |---|---|---|---|
 | **Stage 0** | Reconnaissance + planning | **done** | cfd-harness-unified 4509 files audited; OpenFOAM/STAR-CCM+ adaptation matrix defined |
 | **Stage 1** | Scaffold (reins + AGENTS + executor base/mock + 3 anchor gold_standards + stub adapter) | **done** | 7 reins, 1 spec, 1 ADR, 4 executor implementations, 3 anchor gold_standards ported |
 | **Stage 2** | V&V engine port (auto_verifier + report_engine + audit_package + metrics) | **done (mock-first)** | MOCK executor + gold_standard_comparator + convergence_checker + physics_checker + correction_suggester + verifier + signed manifest + report generator + metrics + orchestrator + CLI |
-| **Stage 3** | Real STAR-CCM+ bridge (1 case E2E on WIN_STARCCM) | **not started** | stub executors return MODE_NOT_YET_IMPLEMENTED |
-| **Stage 4** | 3 anchor cases (LDC + NACA + cylinder wake) end-to-end | **not started** | depends on Stage 3 |
+| **Stage 3 Phase A** | **Bridge + executor (real)** | **done (proved spawn)** | `CodebuddyRepl` subprocess wrapper + `StarCCMExecutor` real impl + `WinStarCCMExecutor` → delegate. Bridge spawns STAR-CCM+ 19.02.009 in **14.68s** (vortex-street proven path). 5/5 real-solver tests pass. |
+| **Stage 3 Phase B** | **LDC E2E (Java macro)** | **not started** | `LidDrivenCavity.java` ~250 lines; based on `CliNaca2412E2E.java` pattern. Needs the new macro + a base LDC sim file. |
+| **Stage 4** | 3 anchor cases (LDC + NACA + cylinder wake) end-to-end | **not started** | depends on Phase B; cylinder can use proven `vortex-street` path |
 | **Stage 5+** | UI (FastAPI + React) | **deferred** | headless / agent-driven v1 |
 
 ## Stage 1+2 inventory (files written)
@@ -56,9 +57,35 @@ The chief engineer will land DECs as Stage 3+ work begins. Expected
 DECs:
 - DEC-001: port the OpenFOAM `solver_info` migration for all 14
   remaining gold standards.
-- DEC-002: the Codebuddy REPL protocol (what commands to send, what
-  responses to expect).
+- DEC-002: ~~the Codebuddy REPL protocol~~ (closed 2026-06-09; the
+  bridge now wraps the 7 unified CLI commands + the vortex-street
+  proven path).
 - DEC-003: the LDC E2E Stage 3+ exit-gate.
+- DEC-004: the case_id → sim_path mapping (currently the CLI looks
+  for ``<codebuddy>/Cases/<case_id>.sim``; the existing 100+ sim
+  files use their own naming convention ``cyl_vortex_v161R_v26_solved.sim``
+  etc. — needs a `case_profiles` config).
+
+## Phase A done — what's left for the next session
+
+1. Write `LidDrivenCavity.java` (~250 lines) — modeled on
+   `CliNaca2412E2E.java`:
+   - Step 1: 2D square cavity geometry (1m × 1m) via STAR-CCM+'s
+     plane-2D CAD or a 2D block mesh primitive
+   - Step 2: structured mesh 129×129 (Ghia 1982 reference mesh)
+   - Step 3: BCs — top wall Ux=1, other walls no-slip
+   - Step 4: enable laminar segregated SIMPLE solver
+   - Step 5: initialize + run 5000 iters
+   - Step 6: export u_centerline at 17 Ghia points
+   - Step 7: save .sim + log
+2. Update `_CASE_TO_COMMAND` in
+   `src/cfd_harness/starccm_adapter/executor.py` to route
+   `lid_driven_cavity` → `pipeline` command.
+3. Add `case_profiles.yaml` (or per-gold-standard `sim_path` field)
+   for the case_id → sim_path mapping.
+4. LDC E2E run; verify gold standard tolerance PASS (u_centerline
+   relative error ≤ 5%); mark first "covered" case in the covered
+   map.
 
 ## Open follow-ups
 

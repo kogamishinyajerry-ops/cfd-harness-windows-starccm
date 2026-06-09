@@ -8,7 +8,7 @@
 > end-to-end through the executor. See AGENTS.md §"Definition of
 > success".
 
-## Current state (2026-06-10 00:50+08)
+## Current state (2026-06-10 01:50+08)
 
 | Stage | Scope | Status | Notes |
 |---|---|---|---|
@@ -16,9 +16,10 @@
 | **Stage 1** | Scaffold (reins + AGENTS + executor base/mock + 3 anchor gold_standards + stub adapter) | **done** | 7 reins, 1 spec, 1 ADR, 4 executor implementations, 3 anchor gold_standards ported |
 | **Stage 2** | V&V engine port (auto_verifier + report_engine + audit_package + metrics) | **done (mock-first)** | MOCK executor + gold_standard_comparator + convergence_checker + physics_checker + correction_suggester + verifier + signed manifest + report generator + metrics + orchestrator + CLI |
 | **Stage 3 Phase A** | **Bridge + executor (real)** | **done** | `CodebuddyRepl` subprocess wrapper + `StarCCMExecutor` real impl + `WinStarCCMExecutor` → delegate. Bridge spawns STAR-CCM+ 19.02.009 in **14.68s** (vortex-street proven path). 5/5 real-solver tests pass. |
-| **Stage 3 Phase B** | **LDC Java macro + integration** | **E2E green (sampling partial)** | `LidDrivenCavity.java` written (~735 lines) + 6/6 macro sanity tests pass + LDC_ITERS env override + smoke test green (100-iter, 12s wall). **BCs work**: top y_max → InletBoundary + VelocityMagnitudeProfile=1.0 m/s. **FF sampling blocked** by STAR-CCM+ 19.02.009 API (`getValue()` no-args only on PrimitiveFieldFunction; no CartesianCoordinate in star.base.coordinate, no ProbeManager in star.common). |
-| **Stage 3 Phase C** | **NACA + cylinder wiring** | **E2E green** | NACA: wired to user's `CliNaca2412E2E.java` (Re=6e6, AoA=4°) via `_resolve_macro_path()` across harness + Codebuddy dirs. Cylinder: vortex-street path (Phase A proven). Per-case output path resolution. **13/13 real-solver tests pass in 46s.** |
-| **Stage 4** | 3 anchor cases end-to-end | **partial** | LDC smoke + NACA smoke + cylinder spawn all green. LDC full 5000-iter + Ghia tolerance PASS = deferred (waiting for FF sampling). |
+| **Stage 3 Phase B** | **LDC Java macro + integration** | **E2E green (sampling partial)** | `LidDrivenCavity.java` written (~735 lines) + 6/6 macro sanity tests pass + LDC_ITERS env override + smoke test green (100-iter, 12s wall) + full 5000-iter run (13.8s wall, .sim saved at `Cases/Results/lid_driven_cavity_solved.sim`, 1.98 MB). **BCs work**: top y_max → InletBoundary + VelocityMagnitudeProfile=1.0 m/s. **FF sampling blocked** by STAR-CCM+ 19.02.009 API (DEC-005; 8 probes documented). Manual GUI verification possible via the saved .sim. |
+| **Stage 3 Phase C** | **NACA + cylinder wiring + case_profiles** | **E2E green** | NACA: wired to user's `CliNaca2412E2E.java` (Re=6e6, AoA=4°) via `_resolve_macro_path()` across harness + Codebuddy dirs. Cylinder: vortex-street path (Phase A proven). Per-case output path resolution. **`case_profiles.yaml` consumer wired**: executor reads `sim_path` + `sim_placeholder` from `knowledge/case_profiles.yaml`. |
+| **Stage 3 Phase D** | **Full CLI pipeline (executor + V&V + audit + report)** | **E2E green (fail-closed verified)** | `python -m cfd_harness.cli.run --case lid_driven_cavity --executor win_starccm` runs the full pipeline. Produces `reports/<case>/<timestamp>/data.json` + `data.md` with signed manifest. V&V correctly FAILS when CSV is null (fail-closed safety verified). |
+| **Stage 4** | 3 anchor cases end-to-end | **partial** | LDC smoke + full + NACA smoke + cylinder spawn all green. LDC Ghia tolerance PASS = deferred (FF sampling; user can manual-verify via GUI). NACA Re=6e6 tolerance = full run pending. |
 | **Stage 5+** | UI (FastAPI + React) | **deferred** | headless / agent-driven v1 |
 
 ## Stage 1+2 inventory (files written)
@@ -42,7 +43,7 @@ stub importable — Stage 3+ will lazy-import the real adapter).
 
 | Case | Mock | Docker OpenFOAM | WIN_STARCCM |
 |---|---|---|---|
-| lid_driven_cavity | ✅ runnable (verdict WARN — MOCK ceiling) | stub (refuses) | ✅ E2E smoke (100-iter, 12s). **NOT covered**: u_centerline CSV sampling blocked by STAR-CCM+ 19.02.009 API; deferred to Stage 4 |
+| lid_driven_cavity | ✅ runnable (verdict WARN — MOCK ceiling) | stub (refuses) | ✅ E2E full (5000-iter, 13.8s, .sim saved). **NOT covered**: Ghia 1982 tolerance check needs FF sampling (DEC-005; user manual-verify via GUI) |
 | naca0012_airfoil | ✅ runnable | stub (refuses) | ✅ E2E smoke (200-iter, 12s). User's `CliNaca2412E2E.java` (v34) runs end-to-end. NOT covered: full Re=6e6 tolerance check pending |
 | circular_cylinder_wake | ✅ runnable | stub (refuses) | ✅ E2E spawn (11s). Vortex-street proven path |
 | 14 other gold_standards | ⏳ gold standards not yet ported; CLI doesn't know them | n/a | n/a |
@@ -51,6 +52,14 @@ stub importable — Stage 3+ will lazy-import the real adapter).
 real-solver run passes its tolerance gate end-to-end. NONE of the
 cases are "covered" yet (Stage 3+ work continues). The Mock column is
 "runnable on MOCK", not "covered".
+
+## Test coverage
+
+| Suite | Count | Pass | Wall |
+|---|---|---|---|
+| Main (cfd_harness.tests.*) | 56 | 56 | 13.32s |
+| Bridge + Macro (starccm-bridge.tests) | 13 | 13 | 46.05s |
+| **Total** | **69** | **69** | **~60s** |
 
 ## Open DECs (none yet)
 

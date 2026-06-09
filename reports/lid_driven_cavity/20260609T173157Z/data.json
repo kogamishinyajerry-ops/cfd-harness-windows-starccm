@@ -1,0 +1,96 @@
+{
+  "run_report": {
+    "contract_hash": "beef83160477960f017fecd722f2738fba4ed6350341b0941e95666a144e1e0f",
+    "execution_result": {
+      "execution_time_s": 11.764999999999418,
+      "is_mock": false,
+      "key_quantities": {
+        "_macro_summary": {
+          "elapsed_sec": 0,
+          "init_ok": true,
+          "iters_requested": 200,
+          "run_ok": true
+        },
+        "u_centerline": [
+          NaN,
+          NaN,
+          NaN,
+          NaN,
+          NaN,
+          NaN,
+          NaN,
+          NaN,
+          NaN,
+          NaN,
+          NaN,
+          NaN,
+          NaN,
+          NaN,
+          NaN,
+          NaN,
+          NaN
+        ]
+      },
+      "residuals": {},
+      "success": true
+    },
+    "mode": "win_starccm",
+    "notes": [
+      "win_starccm_real_bridge_stage3plus",
+      "run_macro_ok:macro=LidDrivenCavity.java",
+      "run_macro_elapsed_s=11.76",
+      "csv=True,summary=True"
+    ],
+    "status": "ok",
+    "version": "0.3"
+  },
+  "task_spec": {
+    "case_id": "lid_driven_cavity",
+    "flow_type": "internal",
+    "geometry_type": "simple_grid",
+    "gold_anchor": "D:\\CFD-harness-Windows-StarCCM\\knowledge\\gold_standards\\lid_driven_cavity.yaml",
+    "mesh_density": "default",
+    "parameters": {
+      "Re": 100,
+      "boundary_conditions": {
+        "other_walls_u": 0.0,
+        "top_wall_u": 1.0
+      }
+    },
+    "solver_profile": ""
+  },
+  "verifier_report": {
+    "case_id": "lid_driven_cavity",
+    "comparison_all_pass": false,
+    "comparison_failing": [
+      "u_centerline",
+      "v_centerline",
+      "primary_vortex_location"
+    ],
+    "contract_hash": "beef83160477960f017fecd722f2738fba4ed6350341b0941e95666a144e1e0f",
+    "convergence_all_pass": false,
+    "convergence_failing": [
+      "__no_residuals__"
+    ],
+    "executor_mode": "win_starccm",
+    "is_mock": false,
+    "is_validated": false,
+    "level": "FAIL",
+    "physics_all_pass": true,
+    "physics_failures": [],
+    "physics_warnings": [],
+    "spec_version": "0.3",
+    "suggestions": [
+      {
+        "category": "convergence",
+        "message": "No residuals reported \u2014 solver may have diverged or returned early",
+        "severity": "error"
+      },
+      {
+        "category": "mesh",
+        "message": "Quantity 'u_centerline' off by inf% \u2014 likely under-resolved mesh; try mesh_160 or finer",
+        "severity": "warn"
+      }
+    ]
+  }
+}

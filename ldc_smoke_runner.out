@@ -1,0 +1,2 @@
+status: mode_not_applicable
+notes: ['win_starccm_real_bridge_stage3plus', 'sim_not_found:D:\\StarCCM Codebuddy\\Cases\\lid_driven_cavity.sim', 'case_id=lid_driven_cavity requires a pre-existing .sim at D:\\StarCCM Codebuddy\\Cases\\lid_driven_cavity.sim']

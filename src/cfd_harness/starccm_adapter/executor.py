@@ -126,18 +126,65 @@ class StarCCMExecutor(ExecutorAbc):
         return self._repl
 
     def _resolve_sim(self, case_id: str) -> Path:
-        """Find a .sim file for the case. Default location: ``<sim_root>/<case>.sim``."""
+        """Find a .sim file for the case.
+
+        Resolution order:
+          1. ``knowledge/case_profiles.yaml`` → ``sim_path`` if it
+             exists on disk (the case has a pre-existing solved .sim)
+          2. ``knowledge/case_profiles.yaml`` → ``sim_placeholder``
+             if the main ``sim_path`` doesn't exist (the case builds
+             from scratch; we use the placeholder as a STAR-CCM+
+             bootstrap that the macro will overwrite)
+          3. ``<sim_root>/<case_id>.sim`` (default convention)
+          4. ``<sim_root>/Results/<case_id>.sim``
+
+        For run-macro cases, the macro is responsible for writing
+        the .sim at step 10; the input .sim is just a STAR-CCM+
+        bootstrap file. The macro ignores the placeholder's geometry
+        and physics, building everything from scratch.
+        """
+        # 1/2) case_profiles.yaml
+        profile = self._read_profile(case_id)
+        if profile is not None:
+            main = profile.get("sim_path")
+            if main and Path(main).exists():
+                return Path(main)
+            placeholder = profile.get("sim_placeholder")
+            if placeholder and Path(placeholder).exists():
+                return Path(placeholder)
+        # 3/4) standard locations
         if self._sim_root is None:
             sim_root = Path(self._codebuddy_path or _DEFAULT_CODEBUDDY_PATH) / "Cases"
         else:
             sim_root = Path(self._sim_root)
         candidate = sim_root / f"{case_id}.sim"
         if not candidate.exists():
-            # try Results/
             results = sim_root / "Results" / f"{case_id}.sim"
             if results.exists():
                 return results
         return candidate
+
+    def _read_profile(self, case_id: str) -> dict | None:
+        """Read ``knowledge/case_profiles.yaml`` and return the
+        profile dict for ``case_id``. Returns ``None`` if missing or
+        file is absent / unparseable.
+        """
+        try:
+            import yaml  # PyYAML
+        except ImportError:
+            return None
+        harness_root = Path(__file__).resolve().parent.parent.parent.parent
+        profiles_path = harness_root / "knowledge" / "case_profiles.yaml"
+        if not profiles_path.exists():
+            return None
+        try:
+            with profiles_path.open(encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+        except Exception:
+            return None
+        profiles = (data or {}).get("profiles") or {}
+        entry = profiles.get(case_id)
+        return entry if isinstance(entry, dict) else None
 
     def _macros_search_dirs(self) -> list:
         """Search dirs for case-specific Java macros.

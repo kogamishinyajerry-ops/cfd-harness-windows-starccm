@@ -6,10 +6,18 @@
 # (cyl_vortex_v161R_v26_solved.sim etc.), NOT the gold-standard
 # case_id (circular_cylinder_wake, lid_driven_cavity, etc.).
 #
-# Stage 3+ resolvers use this file. Phase B LDC E2E creates the .sim
-# on the fly (via the LidDrivenCavity.java macro's step 1-2), so
-# the lid_driven_cavity entry can be a placeholder; Phase C NACA /
-# cylinder wake use existing solved .sim files.
+# Stage 3+ resolvers use this file. The fields:
+#   sim_path        — the FINAL saved .sim (may or may not exist yet;
+#                     for cases that build from scratch, the macro
+#                     writes this path on save)
+#   sim_placeholder — OPTIONAL. If set, use this .sim as the input
+#                     to STAR-CCM+ spawn (the macro will overwrite
+#                     geometry + physics). For cases without a
+#                     pre-existing .sim, this is the bootstrap.
+#   sim_template    — legacy name (vortex-street, naca-e2e); informs
+#                     the harness which subcommand pattern to use
+#   macros          — list of case-specific Java macros
+#   expected_outputs — files the macro is expected to write
 
 version: 1
 
@@ -17,8 +25,12 @@ profiles:
   # Phase B: lid_driven_cavity — STAR-CCM+ creates the cavity via the
   # LidDrivenCavity.java macro (step 1-2); the path is just where
   # STAR-CCM+ writes the .sim on save (step 10 of the macro).
+  # No pre-existing .sim; we use the user's cyl_vortex sim as a
+  # bootstrap (the macro ignores the cylinder and builds the cavity
+  # from scratch via the pre-generated STL).
   lid_driven_cavity:
     sim_path: "D:\\StarCCM Codebuddy\\Cases\\Results\\lid_driven_cavity_solved.sim"
+    sim_placeholder: "D:\\StarCCM Codebuddy\\Cases\\cyl_vortex_v161R_v26_solved.sim"
     sim_template: null  # macro creates geometry from scratch
     macros: ["LidDrivenCavity.java"]
     expected_outputs:

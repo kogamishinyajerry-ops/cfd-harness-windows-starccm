@@ -1,0 +1,60 @@
+{
+  "run_report": {
+    "contract_hash": "0515a61fa72a0397588845d94d5194fa677b759e8df157848499f340633ebcef",
+    "execution_result": {
+      "execution_time_s": 0.01,
+      "is_mock": true,
+      "key_quantities": {
+        "cd_mean": 1.36,
+        "cl_rms": 0.048,
+        "mock_preset_marker": true,
+        "strouhal_number": 0.165
+      },
+      "residuals": {
+        "U": 1e-05,
+        "p": 1e-05
+      },
+      "success": true
+    },
+    "mode": "mock",
+    "notes": [
+      "mock_executor_no_truth_source"
+    ],
+    "status": "ok",
+    "version": "0.3"
+  },
+  "task_spec": {
+    "case_id": "naca0012_airfoil",
+    "flow_type": "external",
+    "geometry_type": "imported_geometry",
+    "gold_anchor": "D:\\CFD-harness-Windows-StarCCM\\knowledge\\gold_standards\\naca0012_airfoil.yaml",
+    "mesh_density": "default",
+    "parameters": {
+      "Mach": 0.15,
+      "Re": 6000000.0,
+      "alpha": 2.0
+    },
+    "solver_profile": ""
+  },
+  "verifier_report": {
+    "case_id": "naca0012_airfoil",
+    "comparison_all_pass": false,
+    "comparison_failing": [
+      "cl_alpha2",
+      "cd_alpha2",
+      "cm_alpha2"
+    ],
+    "contract_hash": "0515a61fa72a0397588845d94d5194fa677b759e8df157848499f340633ebcef",
+    "convergence_all_pass": true,
+    "convergence_failing": [],
+    "executor_mode": "mock",
+    "is_mock": true,
+    "is_validated": false,
+    "level": "WARN",
+    "physics_all_pass": true,
+    "physics_failures": [],
+    "physics_warnings": [],
+    "spec_version": "0.3",
+    "suggestions": []
+  }
+}

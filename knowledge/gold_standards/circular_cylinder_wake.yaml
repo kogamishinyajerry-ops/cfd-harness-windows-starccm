@@ -1,0 +1,83 @@
+# Gold Standard — Circular Cylinder Wake (STAR-CCM+ 2402 retarget)
+#
+# Based on Williamson 1996, Annu. Rev. Fluid Mech. 28, 477-539.
+# Re = 200, D = 1, freestream U = 1, far-field BC.
+# Steady-state, incompressible, k-omega SST.
+#
+# Solver retarget (2026-06-09, v0.1.0):
+#   Ported from cfd-harness-unified's OpenFOAM `pimpleFoam` (for Strouhal
+#   extraction via FFT) to STAR-CCM+ 2402 Implicit Unsteady (LES-ready).
+#   Reference VALUES unchanged.
+
+quantity: strouhal_number
+reference_values:
+  - {value: 0.198, name: St}
+tolerance: 0.03                       # 3% relative
+source: "Williamson 1996, Annu. Rev. Fluid Mech. 28, 477-539 — Re=200, von Karman vortex street"
+literature_doi: "10.1146/annurev.fluid.28.1.477"
+mesh_info:
+  cells: 50000                        # O-grid; recommend 50k for clean Re=200
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Implicit Unsteady"
+  schemes: PISO
+  notes: "Migrated from cfd-harness-unified OpenFOAM pimpleFoam. Implicit Unsteady is the equivalent PISO solver; run for 50+ shedding cycles then FFT the lift coefficient to extract St."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: circular_cylinder_wake
+  Re: 200
+  diameter: 1.0
+  freestream_u: 1.0
+  flow_type: EXTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: UNSTEADY
+
+---
+
+quantity: cd_mean
+reference_values:
+  - {value: 1.36, name: cd}
+tolerance: 0.05
+source: "Williamson 1996 — Re=200, mean drag coefficient (time-averaged over multiple shedding cycles)"
+literature_doi: "10.1146/annurev.fluid.28.1.477"
+mesh_info:
+  cells: 50000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Implicit Unsteady"
+  schemes: PISO
+  notes: "Same as strouhal_number; cd is time-averaged over the shedding cycle."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: circular_cylinder_wake
+  Re: 200
+  diameter: 1.0
+  freestream_u: 1.0
+  flow_type: EXTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: UNSTEADY
+
+---
+
+quantity: cl_rms
+reference_values:
+  - {value: 0.048, name: cl_rms}
+tolerance: 0.10
+source: "Williamson 1996 — Re=200, RMS lift coefficient (vortex shedding amplitude)"
+literature_doi: "10.1146/annurev.fluid.28.1.477"
+mesh_info:
+  cells: 50000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Implicit Unsteady"
+  schemes: PISO
+  notes: "Same as strouhal_number; cl_rms is the shedding-amplitude check."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: circular_cylinder_wake
+  Re: 200
+  diameter: 1.0
+  freestream_u: 1.0
+  flow_type: EXTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: UNSTEADY

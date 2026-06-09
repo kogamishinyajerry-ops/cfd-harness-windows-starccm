@@ -1,0 +1,84 @@
+# Gold Standard — NACA 0012 Airfoil (STAR-CCM+ 2402 retarget)
+#
+# Based on Ladson, Brooks, Hill & Sproles 1988, NASA TM 100526.
+# Re = 6.0e6, alpha = 2.0 deg, Mach = 0.15, far-field BC.
+# Steady-state, compressible, k-omega SST (recommended for transonic
+# accuracy; STAR-CCM+ 2402 default).
+#
+# Solver retarget (2026-06-09, v0.1.0):
+#   Ported from cfd-harness-unified's OpenFOAM `simpleFoam` to STAR-CCM+
+#   2402 Steady Coupled (compressible). Reference VALUES unchanged.
+
+quantity: cl_alpha2
+reference_values:
+  - {value: 0.235, name: cl}
+tolerance: 0.02                       # 2% relative — published cl is precise
+source: "Ladson, Brooks, Hill & Sproles 1988, NASA TM 100526 — Re=6e6, alpha=2 deg"
+literature_doi: "10.2514/3.4674"
+mesh_info:
+  cells: 200000                       # C-grid; recommend 200k for clean alpha=2
+  type: unstructured
+  y_plus_wall: 1.0
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Coupled (compressible)"
+  schemes: COUPLED
+  notes: "Migrated from cfd-harness-unified OpenFOAM simpleFoam. Steady Coupled is the preferred solver for compressible airfoil; Mach 0.15 is subsonic but compressibility corrections matter at Re 6e6."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: naca0012_airfoil
+  Re: 6.0e6
+  alpha: 2.0
+  Mach: 0.15
+  flow_type: EXTERNAL
+  geometry_type: IMPORTED_GEOMETRY
+  steady_state: STEADY
+
+---
+
+quantity: cd_alpha2
+reference_values:
+  - {value: 0.0061, name: cd}
+tolerance: 0.03                       # 3% relative
+source: "Ladson, Brooks, Hill & Sproles 1988, NASA TM 100526 — Re=6e6, alpha=2 deg"
+literature_doi: "10.2514/3.4674"
+mesh_info:
+  cells: 200000
+  type: unstructured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Coupled (compressible)"
+  schemes: COUPLED
+  notes: "Same as cl_alpha2; cd is the primary drag-validity check."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: naca0012_airfoil
+  Re: 6.0e6
+  alpha: 2.0
+  Mach: 0.15
+  flow_type: EXTERNAL
+  geometry_type: IMPORTED_GEOMETRY
+  steady_state: STEADY
+
+---
+
+quantity: cm_alpha2
+reference_values:
+  - {value: -0.0095, name: cm_c4}
+tolerance: 0.05
+source: "Ladson, Brooks, Hill & Sproles 1988, NASA TM 100526 — Re=6e6, alpha=2 deg"
+literature_doi: "10.2514/3.4674"
+mesh_info:
+  cells: 200000
+  type: unstructured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Coupled (compressible)"
+  schemes: COUPLED
+  notes: "Same as cl_alpha2; pitching moment about quarter-chord."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: naca0012_airfoil
+  Re: 6.0e6
+  alpha: 2.0
+  Mach: 0.15
+  flow_type: EXTERNAL
+  geometry_type: IMPORTED_GEOMETRY
+  steady_state: STEADY

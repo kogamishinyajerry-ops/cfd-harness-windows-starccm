@@ -1,0 +1,99 @@
+# cfd-harness-windows-starccm · skill index
+#
+# Solver-agnostic. The chief engineer / orchestrator uses
+# `cfd_harness.orchestrator.skill_loader.load_skills_by_type(...)` to
+# enumerate the available skills.
+#
+# Categories:
+#   model_routing:   LLM routing rules (Subagent priority, DEC scope-driven, etc.)
+#   cfd_harness:     V&V engine skills (gold compare, convergence check, etc.)
+#   starccm:         STAR-CCM+-specific skills (Stage 3+; mesh / solve / postprocess)
+#   architecture:    module boundary / four-plane law (system-architect domain)
+
+version: 1
+
+by_category:
+  model_routing:
+    description: "LLM routing rules (carried over from cfd-harness-unified v2.3)"
+    skills:
+      subagent_priority:
+        type: prompt
+        name: "Subagent 优先原则"
+        description: "Push to subagent when main context ≥35% consumed; 1M ctx 校准"
+        source_path: "~/.mavis/AGENTS.md"
+      dec_scope_driven:
+        type: prompt
+        name: "DEC scope-driven"
+        description: "Charter / cross-module / governance-rule-change → full DEC; otherwise commit message"
+        source_path: "AGENTS.md"
+      cadence_floor:
+        type: prompt
+        name: "Cadence floor THRESHOLD 30"
+        description: "Context-consumption floor before pushing to subagent"
+        source_path: "~/.mavis/AGENTS.md"
+
+  cfd_harness:
+    description: "V&V engine skills"
+    skills:
+      four_question_gate:
+        type: prompt
+        name: "The four-question gate"
+        description: "Before any stage-complete claim: LLM-offline runnable? clear artifacts? TrustGate explains trust? AI advisory-only?"
+        source_path: "AGENTS.md"
+      tolerance_integrity:
+        type: prompt
+        name: "Tolerance integrity is non-negotiable"
+        description: "Never weaken a tolerance to make a benchmark pass (vv-director veto)"
+        source_path: ".harness/reins/vv-director/agent.md"
+      byte_deterministic_audit:
+        type: harness
+        name: "Byte-deterministic signed audit package"
+        description: "SHA-256 over (spec_hash | executor_mode | executor_version) + HMAC signature"
+        source_path: "src/cfd_harness/audit_package/"
+
+  starccm:
+    description: "STAR-CCM+-specific skills (Stage 3+)"
+    skills:
+      mesh_pipeline:
+        type: harness
+        name: "STAR-CCM+ mesh pipeline"
+        description: "Java macro generator for surface / volume mesh; call D:\\StarCCM Codebuddy REPL"
+        source_path: "src/cfd_harness/starccm_adapter/"
+        stage: "3+"
+      solve_pipeline:
+        type: harness
+        name: "STAR-CCM+ solve pipeline"
+        description: "Java macro generator for segregated SIMPLE / coupled solver"
+        source_path: "src/cfd_harness/starccm_adapter/"
+        stage: "3+"
+      postprocess_pipeline:
+        type: harness
+        name: "STAR-CCM+ postprocess pipeline"
+        description: "Scene export + CSV/PNG render + gold-point sampling"
+        source_path: "src/cfd_harness/starccm_adapter/"
+        stage: "3+"
+      codebuddy_repl:
+        type: harness
+        name: "Codebuddy REPL bridge"
+        description: "subprocess wrapper for D:\\StarCCM Codebuddy\\starccm_cli_repl.py"
+        source_path: "packages/starccm-bridge/"
+        stage: "3+"
+
+  architecture:
+    description: "Architecture consult (system-architect domain)"
+    skills:
+      four_plane_law:
+        type: prompt
+        name: "Four-plane import/runtime law (ADR-001)"
+        description: "EXECUTION has no cross-plane imports; VERIFICATION → EXECUTION; REPORTING → EXECUTION+VERIFICATION; AUDIT → all; ADAPTER_STARCCM → all"
+        source_path: "docs/adr/ADR-001-four-plane-import-enforcement.md"
+      mock_first:
+        type: prompt
+        name: "Mock-first invariant"
+        description: "ExecutorMode.MOCK always works; real executor is opt-in"
+        source_path: "docs/specs/EXECUTOR_ABSTRACTION.md"
+
+# Stage 3+ addition: a `by_solver_type` view that the orchestrator
+# can use to filter skills by executor mode (eg. only show
+# `starccm.*` skills when ExecutorMode.WIN_STARCCM is selected).
+# For Stage 1+2, the orchestrator uses `by_category` only.

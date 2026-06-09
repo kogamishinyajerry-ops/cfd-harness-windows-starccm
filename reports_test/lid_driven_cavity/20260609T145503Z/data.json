@@ -1,0 +1,72 @@
+{
+  "run_report": {
+    "contract_hash": "0515a61fa72a0397588845d94d5194fa677b759e8df157848499f340633ebcef",
+    "execution_result": {
+      "execution_time_s": 0.01,
+      "is_mock": true,
+      "key_quantities": {
+        "mock_preset_marker": true,
+        "u_centerline": [
+          0.0,
+          -0.037,
+          0.025,
+          0.333,
+          1.0
+        ]
+      },
+      "residuals": {
+        "U": 1e-06,
+        "p": 1e-06
+      },
+      "success": true
+    },
+    "mode": "mock",
+    "notes": [
+      "mock_executor_no_truth_source"
+    ],
+    "status": "ok",
+    "version": "0.3"
+  },
+  "task_spec": {
+    "case_id": "lid_driven_cavity",
+    "flow_type": "internal",
+    "geometry_type": "simple_grid",
+    "gold_anchor": "D:\\CFD-harness-Windows-StarCCM\\knowledge\\gold_standards\\lid_driven_cavity.yaml",
+    "mesh_density": "default",
+    "parameters": {
+      "Re": 100,
+      "boundary_conditions": {
+        "other_walls_u": 0.0,
+        "top_wall_u": 1.0
+      }
+    },
+    "solver_profile": ""
+  },
+  "verifier_report": {
+    "case_id": "lid_driven_cavity",
+    "comparison_all_pass": false,
+    "comparison_failing": [
+      "u_centerline",
+      "v_centerline",
+      "primary_vortex_location"
+    ],
+    "contract_hash": "0515a61fa72a0397588845d94d5194fa677b759e8df157848499f340633ebcef",
+    "convergence_all_pass": true,
+    "convergence_failing": [],
+    "executor_mode": "mock",
+    "is_mock": true,
+    "is_validated": false,
+    "level": "WARN",
+    "physics_all_pass": true,
+    "physics_failures": [],
+    "physics_warnings": [],
+    "spec_version": "0.3",
+    "suggestions": [
+      {
+        "category": "mesh",
+        "message": "Quantity 'u_centerline' off by inf% \u2014 likely under-resolved mesh; try mesh_160 or finer",
+        "severity": "warn"
+      }
+    ]
+  }
+}

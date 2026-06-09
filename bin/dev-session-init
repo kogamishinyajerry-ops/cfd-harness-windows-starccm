@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""dev-session-init: initialize a development session for cfd-harness-windows-starccm.
+
+Stage 1+2 stub: prints a banner + a checklist for the chief engineer to
+follow. Stage 3+ may add real environment validation (Python version,
+git status, pytest baseline).
+"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+
+def main() -> int:
+    repo_root = Path(__file__).resolve().parent.parent
+    print("=" * 72)
+    print(f"cfd-harness-windows-starccm · dev session init")
+    print("=" * 72)
+    print()
+    print(f"repo root:  {repo_root}")
+    print(f"Python:     {sys.version.split()[0]} (requires 3.12+)")
+    print()
+    print("Chief engineer's pre-flight checklist:")
+    print("  [ ] git status clean (or at least all Stage 1+2 work committed)")
+    print("  [ ] .harness/reins/ has 7 reins (chief, starccm-adapter, vv-director, system-architect, backend, test-red, docs)")
+    print("  [ ] pytest -m 'not real_solver' is green")
+    print("  [ ] reports/STATE.md is current (covered map matches reality)")
+    print("  [ ] knowledge/gold_standards/ has at least the 3 anchor cases (LDC + NACA + cylinder)")
+    print()
+    print("Smoke commands:")
+    print(f"  cd {repo_root}")
+    print("  .venv/bin/python -m cfd_harness.cli.run --case lid_driven_cavity --executor mock")
+    print("  .venv/bin/python -m cfd_harness.cli.run --case naca0012_airfoil --executor mock")
+    print("  .venv/bin/python -m cfd_harness.cli.run --case circular_cylinder_wake --executor mock")
+    print()
+    print("=" * 72)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,27 @@
+# starccm-bridge · subprocess wrapper for the user's Codebuddy REPL
+# Stage 1+2: this sub-package is a stub.
+# Stage 3+: real impl lives in src/starccm_bridge/repl.py
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["starccm_bridge*"]
+
+[project]
+name = "starccm-bridge"
+version = "0.1.0"
+description = "subprocess wrapper for D:\\StarCCM Codebuddy\\starccm_cli_repl.py (Stage 3+)"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"

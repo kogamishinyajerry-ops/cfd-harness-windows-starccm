@@ -1,0 +1,118 @@
+# cfd-harness-windows-starccm · pyproject.toml
+# Adapted from cfd-harness-unified pyproject.toml (v0.1.0).
+# Key deltas:
+#   - Package name: cfd-harness-windows-starccm
+#   - Source layout: src/cfd_harness/ (not src/, no .py shadowing)
+#   - Dependency floor: import-linter, pyyaml, jinja2, jsonschema
+#   - Dropped: notion-client (Notion sync is optional in this repo; re-add
+#     under extras when needed), docker (Win path doesn't use Docker for v1)
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["cfd_harness*"]
+
+[project]
+name = "cfd-harness-windows-starccm"
+version = "0.1.0"
+description = "Windows + STAR-CCM+ 2402 multi-agent V&V harness, adapted from cfd-harness-unified (macOS + OpenFOAM)."
+requires-python = ">=3.11"  # v0.1.0: 3.11+ for now; target 3.12+ in v0.2.0 (3.12 has the StrEnum/BaseExceptionGroup features we use)
+dependencies = [
+    "pyyaml>=6.0",
+    # Runtime deps: numpy for extractors, jinja2 for report engine.
+    # 3.1.6 floor for jinja2 per cfd-harness-unified security baseline.
+    "numpy>=1.26",
+    "jinja2>=3.1.6",
+    "jsonschema>=4.0",   # for gold_standard schema validation
+    "typing-extensions>=4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pytest-mock>=3.14",
+    "import-linter>=2.0",  # four-plane import law enforcement (ADR-001)
+]
+starccm-bridge = [
+    # Stage 3+ — the Codebuddy REPL bridge calls starccm_cli_repl.py
+    # which lives outside this repo (D:\StarCCM Codebuddy). Bridge needs
+    # subprocess + json for REPL protocol only.
+]
+real-solver = [
+    # Stage 3+ — opt-in real STAR-CCM+ execution. By default, the
+    # harness is mock-first; install this extra to enable --executor
+    # win_starccm on a Windows machine with STAR-CCM+ 2402 installed.
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "packages/starccm-bridge/tests"]
+addopts = "-v --tb=short"
+markers = [
+    "real_solver: tests that require a real STAR-CCM+ install (deselect with '-m \"not real_solver\"')",
+    "plane_enforcement: AST-walking tests that enforce ADR-001",
+]
+
+[tool.importlinter]
+root_package = "cfd_harness"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "EXECUTION has no solver-agnostic dependencies"
+type = "forbidden"
+source_modules = ["cfd_harness.executor"]
+forbidden_modules = [
+    "cfd_harness.auto_verifier",
+    "cfd_harness.report_engine",
+    "cfd_harness.audit_package",
+    "cfd_harness.metrics",
+    "cfd_harness.starccm_adapter",
+]
+[[tool.importlinter.contracts]]
+name = "VERIFICATION depends on EXECUTION only"
+type = "layers"
+layers = [
+    "cfd_harness.executor",
+    "cfd_harness.auto_verifier",
+]
+[[tool.importlinter.contracts]]
+name = "REPORTING depends on EXECUTION + VERIFICATION"
+type = "layers"
+layers = [
+    "cfd_harness.executor",
+    "cfd_harness.auto_verifier",
+    "cfd_harness.report_engine",
+]
+[[tool.importlinter.contracts]]
+name = "AUDIT depends on EXECUTION + VERIFICATION + REPORTING + METRICS"
+type = "layers"
+layers = [
+    "cfd_harness.executor",
+    "cfd_harness.auto_verifier",
+    "cfd_harness.metrics",
+    "cfd_harness.report_engine",
+    "cfd_harness.audit_package",
+]
+[[tool.importlinter.contracts]]
+name = "ADAPTER_STARCCM is downstream of all solver-agnostic planes"
+type = "forbidden"
+source_modules = [
+    "cfd_harness.executor",
+    "cfd_harness.auto_verifier",
+    "cfd_harness.metrics",
+    "cfd_harness.report_engine",
+    "cfd_harness.audit_package",
+]
+forbidden_modules = ["cfd_harness.starccm_adapter"]
+
+[tool.coverage.run]
+source = ["src/cfd_harness"]
+omit = ["tests/*", "packages/*/tests/*"]
+
+[tool.coverage.report]
+fail_under = 80

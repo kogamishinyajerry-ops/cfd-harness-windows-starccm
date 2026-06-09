@@ -1,0 +1,70 @@
+# cfd-harness-windows-starccm · canonical case whitelist
+#
+# Solver-agnostic. The chief engineer uses this list to enumerate the
+# 3 anchor cases for Stage 4 E2E + the 17 cases that the V&V engine
+# supports in Stage 2+ (mock-first).
+#
+# Schema (per case):
+#   id:           case_id (matches knowledge/gold_standards/<id>.yaml)
+#   name:         human-readable name
+#   flow_type:    one of the FlowType values (internal/external/natural_convection/conjugate/compressible)
+#   geometry_type: SIMPLE_GRID | IMPORTED_GEOMETRY | CAD_GEOMETRY
+#   anchor:       is this case the chief engineer's anchor? (3 for Stage 4)
+#   gold_standard: path to the gold standard
+#   solver_profile: path to the solver profile (Stage 3+)
+#   references:   literature DOI(s) for the gold reference
+
+version: 1
+
+# 3 anchor cases (Stage 4 E2E priority)
+anchors:
+  - id: lid_driven_cavity
+    name: "2D Lid-Driven Cavity (Ghia 1982)"
+    flow_type: internal
+    geometry_type: simple_grid
+    gold_standard: knowledge/gold_standards/lid_driven_cavity.yaml
+    references:
+      - "10.1016/0021-9991(82)90058-4"   # Ghia, Ghia & Shin 1982
+
+  - id: naca0012_airfoil
+    name: "NACA 0012 Airfoil (Ladson 1988)"
+    flow_type: external
+    geometry_type: imported_geometry
+    gold_standard: knowledge/gold_standards/naca0012_airfoil.yaml
+    references:
+      - "10.2514/3.4674"                 # Ladson, Brooks, Hill, Sproles 1988
+
+  - id: circular_cylinder_wake
+    name: "Circular Cylinder Wake (Williamson 1996)"
+    flow_type: external
+    geometry_type: simple_grid
+    gold_standard: knowledge/gold_standards/circular_cylinder_wake.yaml
+    references:
+      - "10.1146/annurev.fluid.28.1.477"  # Williamson 1996
+
+# All 17 cases ported from cfd-harness-unified. The full list lives in
+# knowledge/gold_standards/; the chief engineer's Stage 4 E2E only
+# touches the 3 anchors above.
+all_cases:
+  - axisymmetric_impinging_jet
+  - backward_facing_step
+  - backward_facing_step_steady
+  - cht_pipe_gnielinski
+  - cht_straight_fin
+  - circular_cylinder_wake     # anchor
+  - cylinder_crossflow
+  - differential_heated_cavity
+  - duct_flow
+  - fully_developed_plane_channel_flow
+  - impinging_jet
+  - lid_driven_cavity          # anchor
+  - naca0012_airfoil           # anchor
+  - plane_channel_flow
+  - rayleigh_benard_convection
+  - turbulent_flat_plate
+
+# Solver-agnostic note: the actual solver profile is solver-specific;
+# for STAR-CCM+ 2402 on Windows, the chief engineer will create one
+# Java macro per case family (mesh / solve / postprocess). Those
+# macros are NOT in the whitelist — they live in
+# src/cfd_harness/starccm_adapter/macros/ (Stage 3+).

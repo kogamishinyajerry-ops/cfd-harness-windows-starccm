@@ -1,0 +1,137 @@
+# Gold Standard — Lid-Driven Cavity (STAR-CCM+ 2402 retarget)
+#
+# Based on Ghia, Ghia & Shin 1982, J. Comput. Phys. 47, 387-411 — Table I.
+# Re = 100, square cavity, lid-driven top wall (u=1.0), all other walls
+# no-slip (u=0). Steady-state, incompressible, structured grid.
+#
+# Solver retarget (2026-06-09, v0.1.0):
+#   Ported from cfd-harness-unified's OpenFOAM `simpleFoam` to STAR-CCM+
+#   2402 Steady Segregated. Reference VALUES unchanged (literature is
+#   solver-agnostic); only `solver_info` block updated.
+#
+# Tolerances:
+#   u_centerline / v_centerline: 0.05 (5% relative)
+#   primary_vortex_location: position 0.02 (±2 grid cells on 129²),
+#                            psi 0.05
+#   secondary_vortices: position 0.02, psi 0.10 (corner eddies are
+#                       mesh-sensitive; declared UNSATISFIED on the
+#                       trapezoidal-ψ extractor — see Ghia 1982 Table III
+#                       and DEC-V61-050 batch 4 in the original)
+#
+# V&V integrity: this gold standard is solver-agnostic in the
+# `reference_values` block. The `solver_info` block is the only
+# STAR-CCM+-specific piece. Any change to `reference_values` requires
+# vv-director sign-off + DEC in reports/decisions/.
+
+quantity: u_centerline
+reference_values:
+  - {y: 0.0000, u: 0.00000}
+  - {y: 0.0625, u: -0.04192}
+  - {y: 0.1250, u: -0.07671}
+  - {y: 0.1875, u: -0.10936}
+  - {y: 0.2500, u: -0.14085}
+  - {y: 0.3125, u: -0.16648}
+  - {y: 0.3750, u: -0.18622}
+  - {y: 0.4375, u: -0.20597}
+  - {y: 0.5000, u: -0.20581}
+  - {y: 0.5625, u: -0.16880}
+  - {y: 0.6250, u: -0.12711}
+  - {y: 0.6875, u: -0.05260}
+  - {y: 0.7500, u: 0.03369}
+  - {y: 0.8125, u: 0.15538}
+  - {y: 0.8750, u: 0.33656}
+  - {y: 0.9375, u: 0.61714}
+  - {y: 1.0000, u: 1.00000}
+tolerance: 0.05
+source: "Ghia, Ghia & Shin 1982, J. Comput. Phys. 47, 387-411 — Table I Re=100, interpolated to 17-point y grid"
+literature_doi: "10.1016/0021-9991(82)90058-4"
+mesh_info:
+  cells: 16641                       # 129x129 (Ghia mesh)
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Segregated"
+  schemes: SIMPLE
+  notes: "Migrated from cfd-harness-unified OpenFOAM `simpleFoam` (Phase 5b). STAR-CCM+ 2402 Steady Segregated is the equivalent segregated SIMPLE solver; default SIMPLE convergence to 1e-6."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: lid_driven_cavity
+  Re: 100
+  flow_type: INTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY
+  boundary_conditions:
+    top_wall_u: 1.0
+    other_walls_u: 0.0
+---
+
+# v_centerline — Ghia 1982 Table II Re=100
+# (Same migration; reference values unchanged from the OpenFOAM
+# version that DEC-V61-050 batch 1 closed in cfd-harness-unified.)
+quantity: v_centerline
+reference_values:
+  - {x: 0.0000, v: 0.00000}
+  - {x: 0.0625, v: 0.09233}
+  - {x: 0.0703, v: 0.10091}
+  - {x: 0.0781, v: 0.10890}
+  - {x: 0.0938, v: 0.12317}
+  - {x: 0.1563, v: 0.16077}
+  - {x: 0.2266, v: 0.17507}
+  - {x: 0.2344, v: 0.17527}
+  - {x: 0.5000, v: 0.05454}
+  - {x: 0.8047, v: -0.24533}
+  - {x: 0.8594, v: -0.22445}
+  - {x: 0.9063, v: -0.16914}
+  - {x: 0.9453, v: -0.10313}
+  - {x: 0.9531, v: -0.08864}
+  - {x: 0.9609, v: -0.07391}
+  - {x: 0.9688, v: -0.05906}
+  - {x: 1.0000, v: 0.00000}
+tolerance: 0.05
+source: "Ghia, Ghia & Shin 1982, J. Comput. Phys. 47, 387-411 — Table II Re=100 (native non-uniform x)"
+literature_doi: "10.1016/0021-9991(82)90058-4"
+mesh_info:
+  cells: 16641
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Segregated"
+  schemes: SIMPLE
+  notes: "Same as u_centerline"
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: lid_driven_cavity
+  Re: 100
+  flow_type: INTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY
+  boundary_conditions:
+    top_wall_u: 1.0
+    other_walls_u: 0.0
+---
+
+# primary_vortex_location — Ghia 1982 Table III Re=100
+quantity: primary_vortex_location
+reference_values:
+  - {name: vortex_center_x, value: 0.6172, unit: normalized}
+  - {name: vortex_center_y, value: 0.7344, unit: normalized}
+  - {name: psi_min, value: -0.103423, unit: normalized}
+position_tolerance: 0.02
+psi_tolerance: 0.05
+source: "Ghia, Ghia & Shin 1982, J. Comput. Phys. 47, 387-411 — Table III Re=100, primary vortex row"
+literature_doi: "10.1016/0021-9991(82)90058-4"
+mesh_info:
+  cells: 16641
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Segregated"
+  schemes: SIMPLE
+  notes: "Same as u_centerline"
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: lid_driven_cavity
+  Re: 100
+  flow_type: INTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY
+  boundary_conditions:
+    top_wall_u: 1.0
+    other_walls_u: 0.0

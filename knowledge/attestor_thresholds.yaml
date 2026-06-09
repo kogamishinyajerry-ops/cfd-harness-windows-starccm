@@ -1,0 +1,37 @@
+# cfd-harness-windows-starccm · attestor thresholds
+#
+# Solver-agnostic. The auto-verifier loads this file via
+# `VerifierConfig.from_thresholds_yaml` and applies per-case
+# overrides.
+
+version: 1
+
+# Defaults (used when a case has no specific override)
+tolerance_floor: 0.05          # 5% relative tolerance for gold comparison
+residual_floor: 1.0e-4         # max final residual for any field
+
+# Per-case overrides. Add a key per case_id to tighten / loosen the
+# floors. The chief engineer / vv-director must approve any change
+# here, and the change is recorded as a DEC in reports/decisions/.
+case_overrides:
+  lid_driven_cavity:
+    tolerance_floor: 0.05
+    residual_floor: 1.0e-6      # simpleFoam / STAR-CCM+ Steady converge to 1e-6
+  naca0012_airfoil:
+    tolerance_floor: 0.02       # tighter; published drag / lift data is precise
+    residual_floor: 1.0e-5
+  circular_cylinder_wake:
+    tolerance_floor: 0.03
+    residual_floor: 1.0e-4
+  differential_heated_cavity:
+    tolerance_floor: 0.10       # Nusselt number is mesh-sensitive at low Ra
+    residual_floor: 1.0e-6
+  rayleigh_benard_convection:
+    tolerance_floor: 0.15       # Nusselt-Ra scaling is the primary observable
+    residual_floor: 1.0e-6
+
+# Stage 3+ additions (placeholders — no real values yet):
+#   starccm_2402_compatibility: "yes"
+#   win_path:
+#     codebuddy_repl: "D:\\StarCCM Codebuddy\\starccm_cli_repl.py"
+#     starccm_exe: "C:\\Program Files\\Siemens\\STAR-CCM+ 2402\\starccm.exe"

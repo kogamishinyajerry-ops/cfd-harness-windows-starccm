@@ -280,13 +280,17 @@ public class LidDrivenCavity extends StarMacro {
             Collection<?> conts = (Collection<?>) callMethod(cm, "getObjects");
             if (conts == null || conts.isEmpty()) { writeLog("no continuum"); return; }
             Object cont = conts.iterator().next();
-            // Try a list of physics models. The first one that succeeds wins
-            // (or some are required: Steady, Laminar, SegregatedFlow).
+            // Try a list of physics models. The first one that succeeds wins.
+            // Models: Steady + Laminar + SegregatedFlow + Viscous are required
+            // for an LDC case. Per ProbeCylV3, the right packages are
+            // star.flow.* (Steady, SegregatedFlow) and star.turbulence.*
+            // (Laminar, NOT star.flow.Laminar which doesn't exist).
             String[] wanted = {
                 "star.common.ThreeDimensionalModel",
-                "star.common.SteadyModel",
-                "star.flow.LaminarModel",
+                "star.flow.SteadyModel",
+                "star.turbulence.LaminarModel",
                 "star.flow.SegregatedFlowModel",
+                "star.flow.ConstantDensityModel",
                 "star.common.ViscousModel",
                 "star.twodim.TwoDimensionalModel",  // 2D specific (optional)
             };
@@ -305,7 +309,32 @@ public class LidDrivenCavity extends StarMacro {
     // Step 5: Set boundary conditions (top wall = moving wall with Ux=1)
     // ============================================================
     private void step5SetBCs() throws Exception {
+        // Strategy (modeled on the user's VortexStreetV161R_Build.java
+        // which is the proven-working path for STAR-CCM+ 19.02.009):
+        //   1. Get the Wall BC type from ConditionTypeManager
+        //      (NOT via direct VelocityProfile class lookup, which
+        //      is version-fragile).
+        //   2. Assign Wall type to all cavity walls (default is
+        //      already Wall, but we re-set for safety).
+        //   3. For the top wall (lid), set the VelocityProfile
+        //      via getValues().get(VelocityProfile.class)
+        //      + getMethod(ConstantVectorProfileMethod.class)
+        //      + setComponents(1, 0, 0).
+        //   4. Other walls stay no-slip (default).
+        // Step 5: set Wall BC type on all cavity walls, and set the
+        // top wall (lid) tangential velocity. Uses direct imports
+        // (star.common.* already imported) so the compiler can infer
+        // T for gSim.get() — model: VortexStreetV161R_Build.java.
         try {
+            // Step 5a: get the Wall BC type from ConditionTypeManager.
+            ConditionTypeManager ctm = gSim.get(ConditionTypeManager.class);
+            if (ctm == null) { writeLog("no ConditionTypeManager"); return; }
+            // ctm.get(WallBoundary.class) returns the Wall BC instance
+            WallBoundary wallBC = ctm.get(WallBoundary.class);
+            if (wallBC == null) { writeLog("no Wall BC type instance"); return; }
+            writeLog("Wall BC type: " + wallBC.getClass().getName());
+
+            // Step 5b: assign Wall type to all cavity boundaries by name.
             RegionManager rm = gSim.getRegionManager();
             Collection<?> regions = rm.getRegions();
             if (regions == null || regions.isEmpty()) { writeLog("no regions for BCs"); return; }
@@ -314,71 +343,155 @@ public class LidDrivenCavity extends StarMacro {
             Collection<?> bds = bm.getBoundaries();
             if (bds == null || bds.isEmpty()) { writeLog("no boundaries"); return; }
 
-            // Strategy: classify boundaries by their auto-generated
-            // NAME (more reliable than centroid, which depends on
-            // PartGroup/Shape walking that doesn't always work for
-            // thin STL parts). STAR-CCM+ auto-generates these names
-            // for an imported box:
-            //   x_min, x_max  →  left/right walls (no-slip)
-            //   y_min, y_max  →  bottom/top walls
-            //     y_max = TOP = moving wall (lid, Ux=1)
-            //     y_min = bottom = no-slip
-            //   z_min, z_max  →  front/back (no impact for 2D, no-slip)
-            //   "Default Boundary"  →  fallback no-slip
-            //   "cylinder" / "cylinder 2"  →  leftover from a base sim
-            //                                     (skip; not part of cavity)
-            int setCount = 0;
+            int setBCTypeCount = 0;
             for (Object b : bds) {
                 Boundary bnd = (Boundary) b;
                 String name = bnd.getPresentationName();
                 if (name == null) continue;
                 String low = name.toLowerCase();
-                // Skip non-cavity leftovers
-                if (low.contains("cylinder") || low.contains("inlet") || low.contains("outlet") || low.contains("freestream")) {
+                if (low.contains("cylinder") || low.contains("inlet") || low.contains("outlet")
+                        || low.contains("freestream")) {
                     writeLog("  skip " + name + " (not cavity wall)");
                     continue;
                 }
-                boolean isTop = low.equals("y_max");
                 boolean isCavityWall = low.matches("x_(min|max)|y_(min|max)|z_(min|max)|default boundary|default");
                 if (!isCavityWall) {
                     writeLog("  skip " + name + " (not a cavity wall)");
                     continue;
                 }
-                boolean ok = false;
-                // Try the Profile API first (canonical STAR-CCM+ path)
                 try {
-                    Class<?> vpClass = findClass("VelocityProfile");
-                    Class<?> cvpmClass = findClass("ConstantVectorProfileMethod");
-                    if (vpClass != null && cvpmClass != null) {
-                        Object values = callMethod(bnd, "getValues");
-                        Object vp = values.getClass().getMethod("get", Class.class).invoke(values, vpClass);
-                        Object prof = vp.getClass().getMethod("getMethod", Class.class).invoke(vp, cvpmClass);
-                        Object q = callMethod(prof, "getQuantity");
-                        Method setComp = q.getClass().getMethod("setComponents", double.class, double.class, double.class);
-                        if (isTop) setComp.invoke(q, gLidU, 0.0, 0.0);
-                        else      setComp.invoke(q, 0.0, 0.0, 0.0);
-                        ok = true;
-                    }
-                } catch (Throwable ignore) {}
-                // Fallback: setTangentialVelocity
-                if (!ok) {
-                    try {
-                        Method setTv = bnd.getClass().getMethod("setTangentialVelocity",
-                            double.class, double.class, double.class);
-                        if (isTop) setTv.invoke(bnd, gLidU, 0.0, 0.0);
-                        else      setTv.invoke(bnd, 0.0, 0.0, 0.0);
-                        ok = true;
-                    } catch (Throwable ignore) {}
-                }
-                if (ok) {
-                    setCount++;
-                    writeLog("  BC: " + name + (isTop ? " (TOP/lid) V=(" + gLidU + ",0,0)" : " (no-slip) V=(0,0,0)"));
-                } else {
-                    writeLog("  BC " + name + " FAIL: no Profile API + no setTangentialVelocity");
+                    bnd.setBoundaryType((BoundaryType) wallBC);
+                    setBCTypeCount++;
+                } catch (Throwable t) {
+                    writeLog("  setBoundaryType(" + name + ") FAIL: " + unwrap(t));
                 }
             }
-            writeLog("BCs set: " + setCount + " wall(s)");
-            gSim.println("    [step5] BCs set (" + setCount + " walls)");
+            writeLog("BC type set: " + setBCTypeCount + " wall(s) -> Wall");
+
+            // Step 5c: set top wall (lid) velocity. Ux=1, Uy=0, Uz=0.
+            // APPROACH: switch the y_max boundary type to VelocityInlet
+            // (mathematically equivalent to a moving wall for the LDC case).
+            // Wall boundaries in STAR-CCM+ 19.02 don't expose a VelocityProfile
+            // condition by default; trying to set one throws "Condition not
+            // found in ConditionManager". Using VelocityInlet is the same
+            // trick NACA's CliNaca2412E2E.java uses — proven working path.
+            Class<?> velInletCls = Class.forName("star.common.InletBoundary");
+            Object velInletBC = ((ConditionTypeManager) ctm).get((Class<? extends ConditionType>) velInletCls);
+            if (velInletBC == null) {
+                writeLog("no InletBoundary BC type instance from ConditionTypeManager; lid stays no-slip");
+                gSim.println("    [step5] BCs set (only types; velocity NOT set)");
+                return;
+            }
+            int lidTypeSet = 0;
+            for (Object b : bds) {
+                Boundary bnd = (Boundary) b;
+                String name = bnd.getPresentationName();
+                if (name == null) continue;
+                if (!name.toLowerCase().equals("y_max")) continue;
+                try {
+                    bnd.setBoundaryType((BoundaryType) velInletBC);
+                    lidTypeSet++;
+                    writeLog("  y_max (TOP) BC type set -> InletBoundary (lumped as moving-wall)");
+                } catch (Throwable t) {
+                    writeLog("  y_max setBoundaryType(InletBoundary) FAIL: " + unwrap(t));
+                }
+            }
+            if (lidTypeSet == 0) {
+                writeLog("  no boundary named y_max found; lid velocity NOT set");
+                gSim.println("    [step5] BCs set (only types; no y_max boundary)");
+                return;
+            }
+
+            // Now set the velocity profile on the inlet.
+            // Try VelocityMagnitudeProfile (inlet scalar profile) first;
+            // fall back to VelocityProfile (vector) if the magnitude path
+            // doesn't fit (e.g., non-zero y component).
+            Class<?> cvpmClass = findClass("ConstantVectorProfileMethod");
+            Class<?> cspmScalarCls = findClass("ConstantScalarProfileMethod");
+            if (cvpmClass == null) {
+                writeLog("ConstantVectorProfileMethod not findable; lid velocity NOT set");
+                return;
+            }
+            int velSet = 0;
+            for (Object b : bds) {
+                Boundary bnd = (Boundary) b;
+                String name = bnd.getPresentationName();
+                if (name == null) continue;
+                if (!name.toLowerCase().equals("y_max")) continue;
+                try {
+                    Object values = bnd.getValues();
+                    // Try VelocityProfile (vector) first for the (1,0,0) setting
+                    boolean setThis = false;
+                    Class<?> vpCls = findClass("VelocityProfile");
+                    if (vpCls != null) {
+                        try {
+                            Object vp = values.getClass().getMethod("get", Class.class).invoke(values, vpCls);
+                            if (vp != null) {
+                                Object cspm = vp.getClass().getMethod("getMethod", Class.class).invoke(vp, cvpmClass);
+                                if (cspm == null) {
+                                    vp.getClass().getMethod("setMethod", Class.class).invoke(vp, cvpmClass);
+                                    cspm = vp.getClass().getMethod("getMethod", Class.class).invoke(vp, cvpmClass);
+                                }
+                                if (cspm != null) {
+                                    Object q = cspm.getClass().getMethod("getQuantity").invoke(cspm);
+                                    try {
+                                        Method setComp = q.getClass().getMethod("setComponents",
+                                            double.class, double.class, double.class);
+                                        setComp.invoke(q, gLidU, 0.0, 0.0);
+                                    } catch (Throwable tc) {
+                                        // Fallback setValueAndUnits
+                                        Class<?> vecCls = Class.forName("star.vec.Vec");
+                                        Object vec = vecCls.getConstructor(double.class, double.class, double.class)
+                                            .newInstance(gLidU, 0.0, 0.0);
+                                        Class<?> unitsCls = Class.forName("star.common.Units");
+                                        Object uV = gSim.getUnitsManager().getObject("m/s");
+                                        Method setVU = q.getClass().getMethod("setValueAndUnits", vecCls, unitsCls);
+                                        setVU.invoke(q, vec, uV);
+                                    }
+                                    writeLog("  BC: " + name + " (TOP/lid) V=(" + gLidU + ",0,0) via VelocityProfile (vector)");
+                                    setThis = true;
+                                }
+                            }
+                        } catch (Throwable t) {
+                            writeLog("  VelocityProfile (vector) path FAIL: " + unwrap(t));
+                        }
+                    }
+                    // Fallback: VelocityMagnitudeProfile (scalar)
+                    if (!setThis) {
+                        Class<?> vmpCls = findClass("VelocityMagnitudeProfile");
+                        Class<?> cspmS = cspmScalarCls;
+                        if (vmpCls != null && cspmS == null) cspmS = cvpmClass; // try constant vector as scalar
+                        if (vmpCls != null) {
+                            try {
+                                Object vp = values.getClass().getMethod("get", Class.class).invoke(values, vmpCls);
+                                if (vp != null) {
+                                    Object cspm = vp.getClass().getMethod("getMethod", Class.class).invoke(vp, cspmS);
+                                    if (cspm == null) {
+                                        vp.getClass().getMethod("setMethod", Class.class).invoke(vp, cspmS);
+                                        cspm = vp.getClass().getMethod("getMethod", Class.class).invoke(vp, cspmS);
+                                    }
+                                    if (cspm != null) {
+                                        Object q = cspm.getClass().getMethod("getQuantity").invoke(cspm);
+                                        Class<?> unitsCls = Class.forName("star.common.Units");
+                                        Object uV = gSim.getUnitsManager().getObject("m/s");
+                                        Method setVU = q.getClass().getMethod("setValueAndUnits", double.class, unitsCls);
+                                        setVU.invoke(q, gLidU, uV);
+                                        writeLog("  BC: " + name + " (TOP/lid) V=(" + gLidU + ",0,0) via VelocityMagnitudeProfile (scalar)");
+                                        setThis = true;
+                                    }
+                                }
+                            } catch (Throwable t) {
+                                writeLog("  VelocityMagnitudeProfile (scalar) path FAIL: " + unwrap(t));
+                            }
+                        }
+                    }
+                    if (setThis) velSet++;
+                } catch (Throwable t) {
+                    writeLog("  y_max velocity profile FAIL: " + unwrap(t));
+                }
+            }
+            writeLog("BCs set: type=" + setBCTypeCount + " walls, lid=" + lidTypeSet + " -> VelocityInlet, vel=" + velSet);
+            gSim.println("    [step5] BCs set (type=" + setBCTypeCount + ", lid=inlet+" + velSet + ")");
         } catch (Throwable t) {
             writeLog("step5 FATAL: " + unwrap(t));
         }
@@ -588,65 +701,124 @@ public class LidDrivenCavity extends StarMacro {
                 return;
             }
             writeLog("Velocity FF: " + velFF.getClass().getSimpleName());
-            // Evaluate at each Ghia point. Use a Cartesian coordinate.
-            Class<?> dvCls = Class.forName("star.base.neo.DoubleVector");
+            // Evaluate at each Ghia point. PROVEN pattern from
+            // CliExportFieldData.java (probeViaOneCellRegion):
+            //   1. Get the X-component scalar FF: uxFF = velFF.getComponentFunction(0)
+            //   2. For each Ghia point (x,y,z):
+            //      a. Create a SimpleBlockPart with tiny bbox around (x,y,z)
+            //      b. Create a region from this part
+            //      c. Create SumReport bound to uxFF on this region
+            //      d. Read getReportMonitorValue()  (= Ux at the cell)
+            //      e. Cleanup (remove region + report)
+            // The 1-cell region's SumReport effectively samples the FF at (x,y,z).
+            // This pattern was verified working in our probe (probe_sol.log):
+            //   velFF = PrimitiveFieldFunction, uxFF = VectorComponentFieldFunction
+            //   sim.getReportManager().createReport(star.base.report.SumReport)
+            //   rep.setFieldFunction(uxFF)
+            //   rep.getParts().setObjects([region])
+            //   rep.getReportMonitorValue() -> double
+            // velFF is Object-typed (returned via reflection). Use reflection to call
+            // getComponentFunction(0) — returns a scalar FF for the X component.
+            Object uxFF = null;
+            try {
+                Method gcf = velFF.getClass().getMethod("getComponentFunction", int.class);
+                uxFF = gcf.invoke(velFF, 0);
+            } catch (Throwable t) {
+                writeLog("velFF.getComponentFunction(0) FAIL: " + unwrap(t));
+                writeCSV();
+                return;
+            }
+            if (uxFF == null) {
+                writeLog("velFF.getComponentFunction(0) returned null; writing NaN");
+                writeCSV();
+                return;
+            }
+            writeLog("Ux scalar FF: " + uxFF.getClass().getSimpleName());
+            Object repMgr = gSim.getClass().getMethod("getReportManager").invoke(gSim);
+            if (repMgr == null) {
+                writeLog("no ReportManager; writing NaN");
+                writeCSV();
+                return;
+            }
+            Class<?> sumCls = null;
+            for (String cn : new String[]{"star.common.SumReport", "star.base.report.SumReport"}) {
+                try { sumCls = Class.forName(cn); break; } catch (Throwable t) {}
+            }
+            if (sumCls == null) {
+                writeLog("no SumReport class; writing NaN");
+                writeCSV();
+                return;
+            }
+            // Locate SimpleBlockPart factory on RegionManager
+            RegionManager rm = gSim.getRegionManager();
+            Class<?> blockCls = null;
+            for (String cn : new String[]{
+                    "star.meshing.SimpleBlockPart",
+                    "star.meshing.BlockPart",
+                    "star.common.SimpleBlockPart",
+                    "star.common.BlockPart"}) {
+                try { blockCls = Class.forName(cn); break; } catch (Throwable t) {}
+            }
+            if (blockCls == null) {
+                writeLog("no BlockPart class; writing NaN");
+                writeCSV();
+                return;
+            }
             int sampled = 0;
             for (int i = 0; i < 17; i++) {
+                double px = 0.5, py = gYPoints[i], pz = 0.5 * gThickness;
+                Object part = null, region = null, rep = null;
                 try {
-                    Object coord = dvCls.getConstructor(double[].class)
-                        .newInstance(new double[]{0.5, gYPoints[i], 0.5 * gThickness});
-                    // Try the canonical evaluate(coord, false) signature first
-                    Object vx = null;
-                    for (String sig : new String[]{
-                            "(star.base.neo.DoubleVector,boolean)double",
-                            "(star.base.neo.DoubleVector)double",
-                            "(double,double,double)double"
-                    }) {
-                        try {
-                            if (sig.contains("DoubleVector,boolean)double")) {
-                                Method m = velFF.getClass().getMethod("evaluate", dvCls, boolean.class);
-                                vx = m.invoke(velFF, coord, false);
-                            } else if (sig.contains("DoubleVector)double")) {
-                                Method m = velFF.getClass().getMethod("evaluate", dvCls);
-                                vx = m.invoke(velFF, coord);
-                            } else {
-                                // Scalar evaluate(x, y, z) - fall back to direct method name
-                                Method m = velFF.getClass().getMethod("evaluate", double.class, double.class, double.class);
-                                vx = m.invoke(velFF, 0.5, gYPoints[i], 0.5 * gThickness);
-                            }
-                            if (vx != null) break;
-                        } catch (Throwable ignore) {}
+                    // Create SimpleBlockPart
+                    Method createPart = null;
+                    for (String mn : new String[]{"createSimpleBlockPart", "createBlockPart"}) {
+                        try { createPart = rm.getClass().getMethod(mn); break; } catch (Throwable t) {}
                     }
-                    if (vx == null) {
-                        writeLog("  sample y=" + gYPoints[i] + " no evaluate signature");
+                    if (createPart == null) { writeLog("no createSimpleBlockPart"); continue; }
+                    part = createPart.invoke(rm);
+                    // Set tiny bbox
+                    try {
+                        Method setBox = part.getClass().getMethod("setBlockCoordinateSystem",
+                            double.class, double.class, double.class, double.class, double.class, double.class);
+                        double eps = 1.0e-3;
+                        setBox.invoke(part, px - eps, px + eps, py - eps, py + eps, pz - eps, pz + eps);
+                    } catch (Throwable t) {
+                        writeLog("  y=" + py + " setBlockCoordinateSystem FAIL: " + unwrap(t));
                         continue;
                     }
-                    // Velocity is a vector; we need its X component.
-                    // If the FF returns a Vector, extract X; if it's a scalar, use as-is.
-                    if (vx instanceof Double) {
-                        gUAtY[i] = (Double) vx;
-                        sampled++;
-                    } else if (vx instanceof Number) {
-                        gUAtY[i] = ((Number) vx).doubleValue();
-                        sampled++;
-                    } else {
-                        // Vector — try getComponent(0) or x
-                        try {
-                            Method gc = vx.getClass().getMethod("getComponent", int.class);
-                            gUAtY[i] = ((Number) gc.invoke(vx, 0)).doubleValue();
-                            sampled++;
-                        } catch (Throwable t2) {
-                            try {
-                                Method gx = vx.getClass().getMethod("getX");
-                                gUAtY[i] = ((Number) gx.invoke(vx)).doubleValue();
-                                sampled++;
-                            } catch (Throwable t3) {
-                                writeLog("  sample y=" + gYPoints[i] + " cannot extract Ux from " + vx.getClass().getSimpleName());
-                            }
-                        }
+                    // Create region
+                    Method createReg = null;
+                    for (String mn : new String[]{"createRegion", "newRegionFromPart"}) {
+                        try { createReg = rm.getClass().getMethod(mn, part.getClass()); break; } catch (Throwable t) {}
                     }
+                    if (createReg == null) { writeLog("no createRegion method"); continue; }
+                    region = createReg.invoke(rm, part);
+                    // Create SumReport
+                    rep = repMgr.getClass().getMethod("createReport", Class.class).invoke(repMgr, sumCls);
+                    rep.getClass().getMethod("setFieldFunction", Class.forName("star.common.FieldFunction"))
+                        .invoke(rep, uxFF);
+                    Object parts = rep.getClass().getMethod("getParts").invoke(rep);
+                    java.util.List<Object> regList = new java.util.ArrayList<>();
+                    regList.add(region);
+                    parts.getClass().getMethod("setObjects", java.util.Collection.class).invoke(parts, regList);
+                    // Read value
+                    Method gv = rep.getClass().getMethod("getReportMonitorValue");
+                    Object v = gv.invoke(rep);
+                    if (v instanceof Number) {
+                        gUAtY[i] = ((Number) v).doubleValue();
+                        sampled++;
+                    } else if (v instanceof double[]) {
+                        double[] arr = (double[]) v;
+                        if (arr.length >= 1) { gUAtY[i] = arr[0]; sampled++; }
+                    }
+                    writeLog("  y=" + py + " ux=" + gUAtY[i]);
                 } catch (Throwable t) {
-                    writeLog("  sample y=" + gYPoints[i] + " FAIL: " + unwrap(t));
+                    writeLog("  y=" + py + " FAIL: " + unwrap(t));
+                } finally {
+                    // Cleanup
+                    try { repMgr.getClass().getMethod("removeReport", rep.getClass()).invoke(repMgr, rep); } catch (Throwable t) {}
+                    try { rm.getClass().getMethod("removeRegion", region.getClass()).invoke(rm, region); } catch (Throwable t) {}
+                    try { rm.getClass().getMethod("removePart", part.getClass()).invoke(rm, part); } catch (Throwable t) {}
                 }
             }
             writeLog("sampled: " + sampled + "/17 points");

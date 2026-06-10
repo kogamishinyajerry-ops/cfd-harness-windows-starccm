@@ -9,6 +9,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from typing import Optional
@@ -173,6 +174,32 @@ def main(argv: Optional[list] = None) -> int:
     report_md_path.write_text(ReportGenerator().render(data_path), encoding="utf-8")
     print(f"[report] {data_path}")
     print(f"[report] {report_md_path}")
+
+    # Audit file (signed manifest). Lives under reports/audit/<case>/<ts>/
+    # so the data.json + audit.json can be cross-checked independently
+    # (byte-deterministic signed audit package is one of the 5 ground rules).
+    audit_dir = output_root / "audit" / task_spec.case_id / data_path.parent.name
+    audit_dir.mkdir(parents=True, exist_ok=True)
+    audit_file = audit_dir / "audit.json"
+    audit_payload = {
+        "manifest": manifest.to_dict(),
+        "signature": {
+            "digest": signature.digest,
+            "hmac": signature.hmac,
+            "algorithm": signature.algorithm,
+            "signed_at": signature.signed_at,
+        },
+        "verify_recipe": (
+            "from cfd_harness.audit_package import Manifest, Signer; "
+            "from cfd_harness.audit_package.serialize import serialize_manifest; "
+            "ok = Signature(hmac=<hmac>).verify(Manifest(**payload['manifest']), key)"
+        ),
+    }
+    audit_file.write_text(
+        json.dumps(audit_payload, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    print(f"[audit] {audit_file}")
+    print(f"[audit] schema_v{manifest.schema_version} hmac={signature.hmac[:16]}... digest={signature.digest[:16]}...")
 
     # Metrics
     metrics = MetricsAccumulator()

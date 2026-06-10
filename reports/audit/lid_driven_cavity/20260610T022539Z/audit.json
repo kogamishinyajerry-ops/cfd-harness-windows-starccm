@@ -1,0 +1,37 @@
+{
+  "manifest": {
+    "case_id": "lid_driven_cavity",
+    "comparison_all_pass": false,
+    "comparison_failing": [
+      "u_centerline",
+      "v_centerline",
+      "primary_vortex_location"
+    ],
+    "contract_hash": "0515a61fa72a0397588845d94d5194fa677b759e8df157848499f340633ebcef",
+    "convergence_all_pass": true,
+    "convergence_failing": [],
+    "executor_mode": "mock",
+    "gold_anchor": "D:\\CFD-harness-Windows-StarCCM\\knowledge\\gold_standards\\lid_driven_cavity.yaml",
+    "is_mock": true,
+    "is_validated": false,
+    "physics_all_pass": true,
+    "schema_version": 1,
+    "solver_profile": null,
+    "spec_version": "0.3",
+    "suggestions": [
+      {
+        "category": "mesh",
+        "message": "Quantity 'u_centerline' off by inf% \u2014 likely under-resolved mesh; try mesh_160 or finer",
+        "severity": "warn"
+      }
+    ],
+    "verdict_level": "WARN"
+  },
+  "signature": {
+    "algorithm": "HMAC-SHA-256",
+    "digest": "1c91ffee0df6c353bb55dd21bc34e575a0338524c84b57042b97d639cad0a1ed",
+    "hmac": "15d67d0bbf8b0bc160f3bfc2ba6f0cfa1339d3a02495a52830f3512d81a91d2b",
+    "signed_at": "2026-06-10T02:25:39.908731+00:00"
+  },
+  "verify_recipe": "from cfd_harness.audit_package import Manifest, Signer; from cfd_harness.audit_package.serialize import serialize_manifest; ok = Signature(hmac=<hmac>).verify(Manifest(**payload['manifest']), key)"
+}

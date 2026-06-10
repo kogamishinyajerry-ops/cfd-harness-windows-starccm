@@ -1,0 +1,37 @@
+{
+  "manifest": {
+    "case_id": "lid_driven_cavity",
+    "comparison_all_pass": false,
+    "comparison_failing": [
+      "__executor_refused__"
+    ],
+    "contract_hash": "beef83160477960f017fecd722f2738fba4ed6350341b0941e95666a144e1e0f",
+    "convergence_all_pass": false,
+    "convergence_failing": [
+      "__no_residuals__"
+    ],
+    "executor_mode": "win_starccm",
+    "gold_anchor": "D:\\CFD-harness-Windows-StarCCM\\knowledge\\gold_standards\\lid_driven_cavity.yaml",
+    "is_mock": false,
+    "is_validated": false,
+    "physics_all_pass": true,
+    "schema_version": 1,
+    "solver_profile": null,
+    "spec_version": "0.3",
+    "suggestions": [
+      {
+        "category": "executor",
+        "message": "Executor refused: status=mode_not_yet_implemented, notes=('win_starccm_real_bridge_stage3plus', \"codebuddy_bridge_failed:ModuleNotFoundError:No module named 'starccm_bridge'\")",
+        "severity": "error"
+      }
+    ],
+    "verdict_level": "FAIL"
+  },
+  "signature": {
+    "algorithm": "HMAC-SHA-256",
+    "digest": "3f29ffcaeedfe0a78e7f749a855996fe4e1f4e4ee548e1c4aee38a865a4c4f79",
+    "hmac": "1e5b0b96a937ecccdbc871ae50eb13442d5b21a746d594ba2adfe5350fa22981",
+    "signed_at": "2026-06-10T02:26:00.495541+00:00"
+  },
+  "verify_recipe": "from cfd_harness.audit_package import Manifest, Signer; from cfd_harness.audit_package.serialize import serialize_manifest; ok = Signature(hmac=<hmac>).verify(Manifest(**payload['manifest']), key)"
+}

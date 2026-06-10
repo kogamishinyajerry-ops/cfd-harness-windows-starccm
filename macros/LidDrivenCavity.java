@@ -87,6 +87,7 @@ public class LidDrivenCavity extends StarMacro {
             callStep("8.  Run " + gIters + " iterations",         this::step8Run);
             callStep("9.  Sample u_centerline (17 Ghia points)",  this::step9SampleCenterline);
             callStep("10. Save sim + write summary",              this::step10Save);
+            callStep("11. Export scene PNG (Velocity + Pressure)", this::step11ExportPNG);
 
             gSim.println("[LDC] DONE");
         } catch (Exception e) {
@@ -903,4 +904,170 @@ public class LidDrivenCavity extends StarMacro {
     }
 
     public static void main(String[] args) { new LidDrivenCavity().execute(); }
+
+    // ============================================================
+    // Step 11: Export scene PNG (velocity magnitude + pressure)
+    // ============================================================
+    // Reference: VortexStreetV129R.java (proven scene+hardcopy path on
+    // STAR-CCM+ 19.02.009).  Strategy: reflection-safe — try multiple
+    // FF lookup names and method names, degrade gracefully (log + skip)
+    // if any single sub-step fails.  This step never throws; it logs
+    // each sub-step's outcome and returns.  At least one PNG must be
+    // produced for the step to count as success.
+    // ============================================================
+    private void step11ExportPNG() throws Exception {
+        if (!gRunOk) { writeLog("skip scene: run not ok"); return; }
+        int made = 0;
+        // Render velocity magnitude (range 0..gLidU)
+        try {
+            if (renderScalarField("Velocity", "LDC_Velocity",
+                    "lid_driven_cavity_velocity.png", 0.0, gLidU)) {
+                made++;
+            }
+        } catch (Throwable t) {
+            writeLog("velocity PNG FAIL: " + unwrap(t));
+        }
+        // Render pressure (symmetric range; will be auto if fails)
+        try {
+            if (renderScalarField("Pressure", "LDC_Pressure",
+                    "lid_driven_cavity_pressure.png", -1.0, 1.0)) {
+                made++;
+            }
+        } catch (Throwable t) {
+            writeLog("pressure PNG FAIL: " + unwrap(t));
+        }
+        gSim.println("    [step11] PNG exported: " + made);
+    }
+
+    /**
+     * Render a scalar field to a PNG via reflection-safe scene + hardcopy.
+     * Mirrors the proven pattern in VortexStreetV129R.java:99-101.
+     * Returns true on success.
+     */
+    private boolean renderScalarField(String ffLookupName, String sceneName,
+                                       String pngFileName, double minR, double maxR) {
+        try {
+            // 1. Resolve FieldFunctionManager
+            Object ffm = callMethod(gSim, "getFieldFunctionManager");
+            if (ffm == null) {
+                try {
+                    Class<?> ffmCls = Class.forName("star.common.FieldFunctionManager");
+                    ffm = gSim.get(ffmCls);
+                } catch (Throwable ignore) {}
+            }
+            if (ffm == null) { writeLog("  no FieldFunctionManager"); return false; }
+
+            // 2. Lookup FF by name (try several method names)
+            Object ff = null;
+            for (String mn : new String[]{
+                    "getFieldFunction", "getFunction", "getByLabel",
+                    "getByPresentationName", "getObject", "get"
+            }) {
+                try {
+                    Method m = ffm.getClass().getMethod(mn, String.class);
+                    ff = m.invoke(ffm, ffLookupName);
+                    if (ff != null) break;
+                } catch (Throwable ignore) {}
+            }
+            if (ff == null) { writeLog("  FF '" + ffLookupName + "' not found"); return false; }
+            writeLog("  FF: " + ffLookupName + " (" + ff.getClass().getSimpleName() + ")");
+
+            // 3. Get SceneManager + delete any pre-existing scene of same name
+            Object sm = gSim.getSceneManager();
+            if (sm == null) { writeLog("  no SceneManager"); return false; }
+            try {
+                Object scenesObj = callMethod(sm, "getScenes");
+                if (scenesObj instanceof Collection) {
+                    for (Object so : (Collection<?>) scenesObj) {
+                        String n = (String) callMethod(so, "getPresentationName");
+                        if (sceneName.equals(n)) {
+                            try {
+                                sm.getClass().getMethod("deleteScene", so.getClass()).invoke(sm, so);
+                            } catch (Throwable ignore) {}
+                        }
+                    }
+                }
+            } catch (Throwable ignore) {}
+            Object scene = sm.getClass().getMethod("createScene", String.class).invoke(sm, sceneName);
+            if (scene == null) { writeLog("  scene not created"); return false; }
+
+            // 4. Create ScalarDisplayer
+            Object sd = scene.getClass().getMethod("createScalarDisplayer", String.class)
+                              .invoke(scene, "Field");
+            if (sd == null) { writeLog("  ScalarDisplayer not created"); return false; }
+
+            // 5. setFieldFunction
+            try {
+                Class<?> ffCls = Class.forName("star.common.FieldFunction");
+                sd.getClass().getMethod("setFieldFunction", ffCls).invoke(sd, ff);
+            } catch (Throwable t) {
+                writeLog("  setFieldFunction FAIL (non-fatal): " + unwrap(t));
+            }
+
+            // 6. setRange via DoubleVector (best-effort; auto-range if it fails)
+            try {
+                Object sdq = callMethod(sd, "getScalarDisplayQuantity");
+                if (sdq != null) {
+                    Class<?> dvCls = Class.forName("star.vec.DoubleVector");
+                    Object dv = dvCls.getConstructor(double[].class)
+                                     .newInstance(new double[]{minR, maxR});
+                    sdq.getClass().getMethod("setRange", dvCls).invoke(sdq, dv);
+                }
+            } catch (Throwable t) {
+                writeLog("  setRange FAIL (auto-range): " + unwrap(t));
+            }
+
+            // 7. Add all cavity boundaries to the scene's CreatorGroup
+            try {
+                Object cg = callMethod(sd, "getScene");
+                if (cg == null) cg = scene;
+                Object creatorGroup = callMethod(cg, "getCreatorGroup");
+                if (creatorGroup != null) {
+                    RegionManager rm = gSim.getRegionManager();
+                    for (Object r : rm.getRegions()) {
+                        Region reg = (Region) r;
+                        for (Object b : reg.getBoundaryManager().getBoundaries()) {
+                            try {
+                                creatorGroup.getClass().getMethod("add", Object.class)
+                                                    .invoke(creatorGroup, b);
+                            } catch (Throwable ignore) {}
+                        }
+                    }
+                }
+            } catch (Throwable t) {
+                writeLog("  add boundaries FAIL (non-fatal): " + unwrap(t));
+            }
+
+            // 8. initializeAndWait + renderAndWait
+            try {
+                scene.getClass().getMethod("initializeAndWait").invoke(scene);
+            } catch (Throwable t) {
+                writeLog("  initializeAndWait FAIL (non-fatal): " + unwrap(t));
+            }
+            try {
+                scene.getClass().getMethod("renderAndWait").invoke(scene);
+            } catch (Throwable t) {
+                writeLog("  renderAndWait FAIL: " + unwrap(t));
+                return false;
+            }
+
+            // 9. exportImagePNG(File, int width, int height, int aa)
+            File png = new File(gResultsDir, pngFileName);
+            png.getParentFile().mkdirs();
+            try {
+                scene.getClass().getMethod("exportImagePNG", File.class,
+                        int.class, int.class, int.class)
+                    .invoke(scene, png, 1280, 800, 1);
+            } catch (Throwable t) {
+                writeLog("  exportImagePNG FAIL: " + unwrap(t));
+                return false;
+            }
+            writeLog("  PNG OK: " + png.getAbsolutePath() +
+                     " size=" + (png.exists() ? png.length() : -1) + "B");
+            return true;
+        } catch (Throwable t) {
+            writeLog("  render '" + ffLookupName + "' FAIL: " + unwrap(t));
+            return false;
+        }
+    }
 }

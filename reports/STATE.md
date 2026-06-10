@@ -141,3 +141,49 @@ DECs:
 - 14 ADRs (four-plane runtime, byte-determinism, etc.) — Stage 2.5.
 - The `ui/` (FastAPI + React) — Stage 5+ deferred per the chief
   engineer's L0 autonomy grant.
+
+## Phase 3+ optimization pass (2026-06-10, L0 advisory)
+
+User approved a focused optimization round to harden the Stage 3+
+end-to-end pipeline. Scope: P0 + P1.3 + P2 (5h main line).
+P1.4 (LDC FF sampling real fix) is a separate workstream.
+
+| Pri | Item | Status | Verification |
+|---|---|---|---|
+| **P0.1** | `bridge.starccm_bat` reads Codebuddy `use-version` (was: most-recently-modified heuristic) | done | `python -c "from starccm_bridge import CodebuddyRepl; print(CodebuddyRepl().starccm_bat)"` returns `C:\Program Files\Siemens\19.02.009-R8\...\starccm+.bat` (the active version) |
+| **P0.2** | LDC sim-lock recovery: executor auto-`force_new=True` for `lid_driven_cavity` (from-scratch case) | done | unit test `test_force_new_injects_dash_new` asserts cmd argv contains `-new` between sim path and `-batch` |
+| **P1.3** | `bridge.export_scene()` + executor post-step runs `export-scene <sim>` after `run-macro` for NACA-style cases (vortex-street already emits PNGs itself) | done | unit test `test_export_scene_builds_correct_argv` verifies argv; LDC step 11 in macro unchanged |
+| **P2.5** | `bridge._classify_spawn_error()`: stderr_head 500→4000 chars + machine-readable error codes (`OK` / `SIM_LOCK` / `VERSION_MISMATCH` / `MACRO_COMPILE_ERROR` / `TIMEOUT` / `SPAWN_FAIL`) | done | 11 unit tests cover the classifier; `data["error_code"]` surfaces in `RunReport.notes` |
+| **P2.6** | `tests/test_bridge_p0p1p2_fixes.py` — 18 unit tests, all pass in 0.91s (no STAR-CCM+ install required) | done | `pytest packages/starccm-bridge/tests/test_bridge_p0p1p2_fixes.py` → 18/18 PASS |
+| **P2.7** | This section (AGENTS.md / STATE.md updates) | done | – |
+
+### Audit write (post-P0)
+
+Audit files now write to `reports/audit/<case>/<ts>/audit.json` with
+`{manifest, signature, verify_recipe}` — `data_audit.json` MOCK run
+emits a 1.4 KB signed manifest; `WIN_STARCCM` failures also write
+audits, proving the audit path is executor-agnostic.
+
+### LDC step 11 (post-P0)
+
+`LidDrivenCavity.java` extended with reflection-safe `step11ExportPNG()`
+that renders Velocity + Pressure via `Scene → ScalarDisplayer →
+exportImagePNG`. Pattern mirrors the proven `VortexStreetV129R.java`.
+End-to-end PNG verification is blocked on the WIN_STARCCM spawn
+(STAR-CCM+ 19.02.009 refuses to open the existing
+`lid_driven_cavity_solved.sim` — needs manual GUI cleanup or
+`force_new=True` from a fresh `sim_placeholder`).
+
+### P1.4 — LDC FF sampling (deferred)
+
+DEC-005 is still open. The chief engineer will commit to one of:
+
+- (a) **降级** to proxy metric (max velocity / Δp) from monitors —
+  ~1-2h, no LDC FF sampling fix needed
+- (b) **死磕** STAR-CCM+ 19.02.009 reflection for a working FF
+  sampling path — 4-8h, not guaranteed
+- (c) **暂不动** — keep LDC with "NaN known issue" tag, NACA +
+  cylinder coverage first
+
+User chose **(b) 死磕** in the 2026-06-10 scope review. Workstream
+is unblocked but not started in this pass.

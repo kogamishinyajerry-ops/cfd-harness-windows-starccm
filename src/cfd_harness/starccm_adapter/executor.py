@@ -283,7 +283,45 @@ class StarCCMExecutor(ExecutorAbc):
                     macro_path=str(macro_path),
                     timeout_s=self._timeout_s,
                     env=ldc_env,
+                    # LDC is a from-scratch case (builds geometry from
+                    # STL, saves sim at step 10). force_new avoids the
+                    # "Cannot open sim / specify -new" error when the
+                    # previous .sim is missing / version-mismatched /
+                    # locked. Other cases keep their existing .sim.
+                    force_new=(task_spec.case_id == "lid_driven_cavity"),
                 )
+                # Post-step: if the macro run succeeded, ask Codebuddy
+                # export-scene to render a hardcopy of the converged
+                # field.  This is the NACA-onwards path: case-specific
+                # Java macros in the user's Codebuddy/macros/ don't
+                # always include a scene-export step (v34 NACA is
+                # one such case).  We pass the output PNG path
+                # explicitly so the CLI can attach it to the report.
+                # LDC also has step 11 (Velocity + Pressure PNGs via
+                # LidDrivenCavity.java), but the export-scene call is
+                # idempotent — extra scene PNGs don't hurt.
+                if resp.ok:
+                    try:
+                        scene_png = sim_path.with_name(
+                            sim_path.stem + "_scene.png")
+                        scene_resp = repl.export_scene(
+                            sim_path=str(sim_path),
+                            out_png=str(scene_png),
+                            field="",        # reuse first existing scene
+                            auto_range=True,
+                            lut="blue-red",
+                            timeout_s=180,
+                        )
+                        # Stash the PNG path on the response so
+                        # _build_macro_run_report can surface it in
+                        # the execution_result notes.
+                        if scene_resp.ok and scene_png.exists():
+                            resp.data["post_scene_png"] = str(scene_png)
+                    except Exception as scene_err:
+                        # Non-fatal: report the failure but keep the
+                        # main run's verdict.
+                        resp.data["post_scene_error"] = (
+                            f"{type(scene_err).__name__}: {scene_err}")
             else:
                 # Fallback: just run the existing .sim
                 iters = self._mesh_density_to_iters(task_spec.mesh_density)

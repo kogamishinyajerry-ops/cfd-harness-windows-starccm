@@ -108,6 +108,48 @@ _SPAWN_ENV_OVERRIDES = {
 }
 
 
+# stderr truncation length for error messages.  STAR-CCM+ embeds
+# javac diagnostics that can run 1-3 KB; 500 was too tight to see
+# the actual compile / spawn error.  Bump to 4000 to capture the
+# most useful prefix.
+_STDERR_HEAD_CHARS = 4000
+
+
+def _classify_spawn_error(stderr: str, stdout: str, returncode: int) -> str:
+    """Classify a STAR-CCM+ spawn failure into a machine-readable code.
+
+    Codes (stable contract — downstream code may switch on these):
+      - ``"OK"``          — returncode == 0
+      - ``"SIM_LOCK"``    — ``Cannot open file`` / ``specify -new`` —
+        the prior .sim is locked / missing / version-mismatched.
+        Caller should retry with ``force_new=True`` or after killing
+        a stray GUI session.
+      - ``"VERSION_MISMATCH"`` — ``version`` / ``build`` mismatch
+        between the macro and the active STAR-CCM+ install.
+      - ``"MACRO_COMPILE_ERROR"`` — javac-style diagnostics in
+        stderr (eg. ``error:``, ``symbol:``).
+      - ``"TIMEOUT"``     — returncode == -1 + empty stdout.
+      - ``"SPAWN_FAIL"``  — generic catch-all.
+
+    The classification is heuristic (substring match against
+    stderr + stdout).  We intentionally keep it conservative — when
+    in doubt, return ``"SPAWN_FAIL"`` rather than over-fitting.
+    """
+    if returncode == 0:
+        return "OK"
+    blob = (stderr or "") + "\n" + (stdout or "")
+    blob_low = blob.lower()
+    if "cannot open file" in blob_low or "specify -new" in blob_low:
+        return "SIM_LOCK"
+    if "version mismatch" in blob_low or "incompatible" in blob_low and "version" in blob_low:
+        return "VERSION_MISMATCH"
+    if "error:" in blob_low and ("symbol" in blob_low or "location:" in blob_low or ".java:" in blob_low):
+        return "MACRO_COMPILE_ERROR"
+    if returncode == -1 and not (stdout or "").strip():
+        return "TIMEOUT"
+    return "SPAWN_FAIL"
+
+
 def _make_env() -> Dict[str, str]:
     env = os.environ.copy()
     env.update(_SPAWN_ENV_OVERRIDES)
@@ -194,17 +236,54 @@ class CodebuddyRepl:
 
     @property
     def starccm_bat(self) -> Optional[Path]:
-        """Path to starccm+.bat, derived from the Codebuddy status check.
+        """Path to starccm+.bat.
 
-        Returns None if the install can't be found in the standard
-        location (``C:\\Program Files\\Siemens\\...``).
+        Resolution order:
+          1. Codebuddy ``use-version --json`` (the user-controlled
+             active version — most reliable when multiple STAR-CCM+
+             installs coexist)
+          2. Fallback: rglob the standard install root, prefer
+             most-recently-modified (legacy heuristic)
+
+        Returns None if no install can be found.
         """
+        # 1. Try the active-version query (cached on the instance).
+        if not hasattr(self, "_active_bat_cache"):
+            self._active_bat_cache = self._query_active_bat()
+        if self._active_bat_cache is not None:
+            return self._active_bat_cache
+        # 2. Fallback heuristic
         candidates = list(Path(r"C:\Program Files\Siemens").rglob("starccm+.bat"))
         if not candidates:
             return None
-        # Prefer the most-recently-modified install (in case multiple
-        # STAR-CCM+ versions are installed).
         return max(candidates, key=lambda p: p.stat().st_mtime)
+
+    def _query_active_bat(self) -> Optional[Path]:
+        """Subprocess ``python starccm_cli.py use-version --json`` and
+        return the active ``starccm+.bat`` Path.  None on any failure.
+        """
+        try:
+            proc = subprocess.run(
+                [self.python_executable, str(self.cli_script),
+                 "use-version", "--json"],
+                cwd=str(self.codebuddy_path),
+                capture_output=True, text=True, timeout=15, check=False,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            return None
+        if proc.returncode != 0:
+            return None
+        payload = _try_parse_json(proc.stdout)
+        if not payload:
+            return None
+        active = payload.get("active_version") or payload.get("data", {}).get("active_version")
+        if not isinstance(active, dict):
+            return None
+        path_str = active.get("path")
+        if not path_str:
+            return None
+        p = Path(path_str)
+        return p if p.exists() else None
 
     # ----- low-level: subprocess invocation -----
     def _invoke(
@@ -374,6 +453,53 @@ class CodebuddyRepl:
             args.extend(["--out", out_csv])
         return self._invoke("export-field", args, timeout_s=timeout_s)
 
+    def export_scene(
+        self,
+        sim_path: str,
+        out_png: Optional[str] = None,
+        field: str = "",
+        auto_range: bool = True,
+        lut: str = "blue-red",
+        timeout_s: int = 120,
+    ) -> CodebuddyResponse:
+        """``export-scene <sim>`` — render a Scene to PNG (v55+).
+
+        This is the bridge to the Codebuddy ``export-scene`` subcommand
+        which spawns a ``CliExportScene.java`` macro with the chosen
+        field + LUT + range.  Use this AFTER a run-macro / vortex-street
+        spawn finishes, to capture a hardcopy of the converged field.
+
+        Parameters
+        ----------
+        sim_path : str
+            The solved ``.sim`` file.
+        out_png : str, optional
+            Output PNG path.  Defaults to
+            ``Cases/Results/<sim_name>_scene.png``.
+        field : str
+            Field function name to bind (eg. ``"Pressure"``,
+            ``"Velocity.Magnitude"``).  Empty string reuses the
+            first existing scene in the sim.
+        auto_range : bool
+            If True, compute the color range from the field data
+            (default).  If False, use --range-min/--range-max
+            (which the CLI hardcodes; the bridge does not expose
+            manual ranges yet — extend if you need them).
+        lut : str
+            Lookup-table name.  Common choices: ``"blue-red"`` (default),
+            ``"spectrum"``, ``"grayscale"``, ``"thermal"``, ``"cool-warm"``.
+        """
+        args: List[str] = [sim_path]
+        if out_png:
+            args.extend(["--out", out_png])
+        if field:
+            args.extend(["--field", field])
+        if auto_range:
+            args.append("--auto-range")
+        if lut:
+            args.extend(["--lut", lut])
+        return self._invoke("export-scene", args, timeout_s=timeout_s)
+
     def run_macro(
         self,
         sim_path: str,
@@ -381,6 +507,7 @@ class CodebuddyRepl:
         macro_args: str = "",
         timeout_s: int = 1800,
         env: Optional[Dict[str, str]] = None,
+        force_new: bool = False,
     ) -> CodebuddyResponse:
         """Spawn STAR-CCM+ directamente con un Java macro (bypass CLI).
 
@@ -409,6 +536,11 @@ class CodebuddyRepl:
             STAR-CCM+ spawn env (which already includes
             ``JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8`` and
             ``JAVAC_OPTIONS=-encoding UTF-8``).
+        force_new : bool
+            If True, pass ``-new`` to STAR-CCM+ so it creates a new
+            ``.sim`` at ``sim_path`` (overwriting any existing one).
+            Use this for from-scratch cases (LDC builds from STL)
+            or when a prior sim is corrupted / version-mismatched.
         """
         starccm_bat = self.starccm_bat
         if starccm_bat is None or not starccm_bat.exists():
@@ -422,7 +554,10 @@ class CodebuddyRepl:
                 returncode=-1,
                 elapsed_s=0.0,
             )
-        cmd: List[str] = [str(starccm_bat), str(sim_path), "-batch", str(macro_path)]
+        cmd: List[str] = [str(starccm_bat), str(sim_path)]
+        if force_new:
+            cmd.append("-new")
+        cmd.extend(["-batch", str(macro_path)])
         if macro_args:
             cmd.append(macro_args)
         spawn_env = _make_env()
@@ -468,11 +603,14 @@ class CodebuddyRepl:
                 "macro_path": str(macro_path),
                 "starccm_bat": str(starccm_bat),
                 "returncode": proc.returncode,
+                "error_code": _classify_spawn_error(
+                    proc.stderr or "", proc.stdout or "", proc.returncode
+                ),
             },
             error=(
                 None if ok
                 else f"STAR-CCM+ returned RC={proc.returncode}; "
-                     f"stderr_head={proc.stderr[:500]!r}"
+                     f"stderr_head={proc.stderr[:_STDERR_HEAD_CHARS]!r}"
             ),
             returncode=proc.returncode,
             elapsed_s=elapsed,
@@ -526,11 +664,14 @@ class CodebuddyRepl:
                 "macro_path": str(macro_path),
                 "starccm_bat": str(starccm_bat),
                 "returncode": proc.returncode,
+                "error_code": _classify_spawn_error(
+                    proc.stderr or "", proc.stdout or "", proc.returncode
+                ),
             },
             error=(
                 None if ok
                 else f"STAR-CCM+ returned RC={proc.returncode}; "
-                     f"stderr_head={proc.stderr[:500]!r}"
+                     f"stderr_head={proc.stderr[:_STDERR_HEAD_CHARS]!r}"
             ),
             returncode=proc.returncode,
             elapsed_s=elapsed,

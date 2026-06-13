@@ -17,6 +17,8 @@ Checks
         b. a dev-unsigned audit is REJECTED by the default verifier trust
            policy, but is integrity-verifiable with --allow-untrusted (DEC-010).
         c. a tampered manifest fails verification.
+        d. a mock/synthetic-trained surrogate is clamped to WARN and never
+           validated (surrogate honesty ceiling, cfd_harness.surrogate.vv).
 
 Exit code 0 iff ALL checks pass.
 
@@ -136,6 +138,22 @@ def check_honesty_invariants() -> bool:
         _pass("tampered manifest fails verification")
     else:
         _fail("tamper detection", "a modified manifest still verified")
+        ok = False
+
+    # (d) surrogate honesty ceiling: a mock/synthetic-trained surrogate, even
+    #     with a perfect fit, is clamped to WARN and never validated.
+    try:
+        import numpy as np
+        from cfd_harness.surrogate.vv import evaluate_surrogate, DATA_SOURCE_MOCK
+        y = np.array([[0.2, 0.010], [0.4, 0.012], [0.6, 0.015], [0.3, 0.011]])
+        sv = evaluate_surrogate(y, y.copy(), data_source=DATA_SOURCE_MOCK)  # perfect fit
+        if sv.level == "WARN" and sv.is_validated is False and sv.mock_ceiling_applied:
+            _pass("mock-trained surrogate clamped to WARN, never validated")
+        else:
+            _fail("surrogate ceiling", f"level={sv.level} is_validated={sv.is_validated}")
+            ok = False
+    except ImportError as e:  # pragma: no cover
+        _fail("surrogate ceiling", f"import failed: {e}")
         ok = False
 
     return ok

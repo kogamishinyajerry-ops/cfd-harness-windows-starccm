@@ -32,8 +32,11 @@ from cfd_harness.report_engine import DataCollector, ReportGenerator
 __all__ = ["main", "build_parser", "ANCHOR_CASES"]
 
 
-# Anchor cases (the 3 the chief engineer will run E2E in Stage 4).
+# Anchor cases (the 3 the chief engineer will run E2E in Stage 4) +
+# 13 new cases ported 2026-06-11 from cfd-harness-unified (mock-first
+# stage 2.x — see DEC-006 if you want the formal rationale).
 ANCHOR_CASES = {
+    # 3 anchors (Stage 4 E2E priority)
     "lid_driven_cavity": {
         "flow_type": FlowType.INTERNAL,
         "geometry_type": GeometryType.SIMPLE_GRID,
@@ -48,6 +51,76 @@ ANCHOR_CASES = {
         "flow_type": FlowType.EXTERNAL,
         "geometry_type": GeometryType.SIMPLE_GRID,
         "parameters": {"Re": 200, "diameter": 1.0, "freestream_u": 1.0},
+    },
+    # 13 new cases (mock-first; gold_standards/ + _CASE_PRESETS both shipped)
+    # ---- INTERNAL group (5 new) ----
+    "backward_facing_step": {
+        "flow_type": FlowType.INTERNAL,
+        "geometry_type": GeometryType.SIMPLE_GRID,
+        "parameters": {"Re": 600, "expansion_ratio": 2.0},
+    },
+    "backward_facing_step_steady": {
+        "flow_type": FlowType.INTERNAL,
+        "geometry_type": GeometryType.SIMPLE_GRID,
+        "parameters": {"Re": [100, 200, 600], "expansion_ratio": 2.0},
+    },
+    "duct_flow": {
+        "flow_type": FlowType.INTERNAL,
+        "geometry_type": GeometryType.SIMPLE_GRID,
+        "parameters": {"Re": [1500, 10000], "diameter": 0.01},
+    },
+    "fully_developed_plane_channel_flow": {
+        "flow_type": FlowType.INTERNAL,
+        "geometry_type": GeometryType.SIMPLE_GRID,
+        "parameters": {"Re": 100, "half_height": 1.0},
+    },
+    "plane_channel_flow": {
+        "flow_type": FlowType.INTERNAL,
+        "geometry_type": GeometryType.SIMPLE_GRID,
+        "parameters": {"Re_tau": 590},
+    },
+    # ---- EXTERNAL group (4 new) ----
+    "axisymmetric_impinging_jet": {
+        "flow_type": FlowType.EXTERNAL,
+        "geometry_type": GeometryType.SIMPLE_GRID,
+        "parameters": {"Re": 10000, "H_over_D": 2.0, "T_wall": 350.0, "T_jet": 300.0},
+    },
+    "cylinder_crossflow": {
+        "flow_type": FlowType.EXTERNAL,
+        "geometry_type": GeometryType.SIMPLE_GRID,
+        "parameters": {"Re": 3900, "diameter": 1.0, "freestream_u": 1.0},
+    },
+    "impinging_jet": {
+        "flow_type": FlowType.EXTERNAL,
+        "geometry_type": GeometryType.SIMPLE_GRID,
+        "parameters": {"Re": 8000, "H_over_W": 4.0, "T_wall": 350.0, "T_jet": 300.0},
+    },
+    "turbulent_flat_plate": {
+        "flow_type": FlowType.EXTERNAL,
+        "geometry_type": GeometryType.SIMPLE_GRID,
+        "parameters": {"Re_x": 1.0e7},
+    },
+    # ---- NATURAL_CONVECTION group (2 new) ----
+    "differential_heated_cavity": {
+        "flow_type": FlowType.NATURAL_CONVECTION,
+        "geometry_type": GeometryType.SIMPLE_GRID,
+        "parameters": {"Ra": [1.0e3, 1.0e5], "T_hot": 1.0, "T_cold": 0.0},
+    },
+    "rayleigh_benard_convection": {
+        "flow_type": FlowType.NATURAL_CONVECTION,
+        "geometry_type": GeometryType.SIMPLE_GRID,
+        "parameters": {"Ra_range": [1.0e5, 1.0e9], "T_hot": 1.0, "T_cold": 0.0},
+    },
+    # ---- CONJUGATE group (2 new) ----
+    "cht_pipe_gnielinski": {
+        "flow_type": FlowType.CONJUGATE,
+        "geometry_type": GeometryType.SIMPLE_GRID,
+        "parameters": {"Re": [10000, 100000], "Pr": 0.7, "T_wall": 350.0, "T_inlet": 300.0},
+    },
+    "cht_straight_fin": {
+        "flow_type": FlowType.CONJUGATE,
+        "geometry_type": GeometryType.SIMPLE_GRID,
+        "parameters": {"k_fin": 200.0, "h_conv": 100.0, "L_c": 0.05, "thickness": 0.003, "T_wall": 400.0, "T_inf": 300.0},
     },
 }
 

@@ -30,7 +30,13 @@ def test_mock_external_preset(naca_task_spec):
 
 
 def test_mock_natural_convection_preset():
-    """NATURAL_CONVECTION flow returns the nusselt_number preset."""
+    """NATURAL_CONVECTION flow returns the nusselt preset.
+
+    As of 2026-06-11 (mock v0.1.1), case_id-based presets take precedence
+    over flow_type-based ones. The differential_heated_cavity case now
+    returns the de Vahl Davis 1983-anchored quantities (Ra1e3 + Ra1e5)
+    instead of the generic nusselt_number.
+    """
     spec = TaskSpec(
         case_id="differential_heated_cavity",
         flow_type=FlowType.NATURAL_CONVECTION,
@@ -38,8 +44,11 @@ def test_mock_natural_convection_preset():
         parameters={"Ra": 1e3, "T_hot": 1.0, "T_cold": 0.0},
     )
     rpt = MockExecutor().execute(spec)
-    assert "nusselt_number" in rpt.execution_result.key_quantities
-    assert rpt.execution_result.key_quantities["mock_preset_marker"] is True
+    q = rpt.execution_result.key_quantities
+    # Case-id preset should win — both Ra-anchored Nu quantities present
+    assert "nusselt_hot_wall_Ra1e3" in q
+    assert "nusselt_hot_wall_Ra1e5" in q
+    assert q["mock_preset_marker"] is True
 
 
 def test_mock_default_preset_for_unknown_flow():

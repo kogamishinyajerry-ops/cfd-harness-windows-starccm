@@ -4,7 +4,9 @@
 # `VerifierConfig.from_thresholds_yaml` and applies per-case
 # overrides.
 
-version: 1
+version: 2   # 2026-06-11: 13 new case_overrides for the DEC-006
+             # mock-runnable cases. Tolerances graded by case
+             # difficulty (analytical = tight; turbulent = wider).
 
 # Defaults (used when a case has no specific override)
 tolerance_floor: 0.05          # 5% relative tolerance for gold comparison
@@ -14,6 +16,7 @@ residual_floor: 1.0e-4         # max final residual for any field
 # floors. The chief engineer / vv-director must approve any change
 # here, and the change is recorded as a DEC in reports/decisions/.
 case_overrides:
+  # ---- 3 anchor cases (Stage 4 E2E) ----
   lid_driven_cavity:
     tolerance_floor: 0.05
     residual_floor: 1.0e-6      # simpleFoam / STAR-CCM+ Steady converge to 1e-6
@@ -23,12 +26,61 @@ case_overrides:
   circular_cylinder_wake:
     tolerance_floor: 0.03
     residual_floor: 1.0e-4
+
+  # ---- 13 new cases (DEC-006, 2026-06-11) ----
+  # Tolerances graded by case difficulty:
+  #   analytical (Poiseuille parabola)  → 0.02 (tight, mesh-independent)
+  #   well-validated expt (BFS, DHC)    → 0.05 (default)
+  #   mesh-sensitive (CHT, RB scaling)  → 0.10 - 0.15 (looser, mesh-dependent)
+  #   turbulent (flat plate)            → 0.05 (default + tighten cf)
+
+  # INTERNAL family
+  backward_facing_step:
+    tolerance_floor: 0.05       # Armaly 1983 reattachment length is precise
+    residual_floor: 1.0e-6
+  backward_facing_step_steady:
+    tolerance_floor: 0.10       # 3-Re scan; canonical Re=600 is tight,
+                                 # but Re=100/200 are mesh-sensitive
+    residual_floor: 1.0e-6
+  duct_flow:
+    tolerance_floor: 0.02       # analytical Poiseuille + Moody chart
+    residual_floor: 1.0e-6
+  fully_developed_plane_channel_flow:
+    tolerance_floor: 0.02       # analytical 2D Poiseuille parabola
+    residual_floor: 1.0e-6
+  plane_channel_flow:
+    tolerance_floor: 0.08       # DNS-validated RANS; RANS doesn't reach DNS precision
+    residual_floor: 1.0e-5
+
+  # EXTERNAL family
+  axisymmetric_impinging_jet:
+    tolerance_floor: 0.10       # Nu literature spread is wide (±20% across correlations)
+    residual_floor: 1.0e-5
+  cylinder_crossflow:
+    tolerance_floor: 0.05       # Williamson 1996 is canonical
+    residual_floor: 1.0e-4
+  impinging_jet:
+    tolerance_floor: 0.10       # same as axisymmetric (correlation spread)
+    residual_floor: 1.0e-5
+  turbulent_flat_plate:
+    tolerance_floor: 0.05       # Coles / Schlichting canonical
+    residual_floor: 1.0e-5
+
+  # NATURAL_CONVECTION family
   differential_heated_cavity:
     tolerance_floor: 0.10       # Nusselt number is mesh-sensitive at low Ra
     residual_floor: 1.0e-6
   rayleigh_benard_convection:
     tolerance_floor: 0.15       # Nusselt-Ra scaling is the primary observable
     residual_floor: 1.0e-6
+
+  # CONJUGATE family
+  cht_pipe_gnielinski:
+    tolerance_floor: 0.05       # Gnielinski correlation is well-validated
+    residual_floor: 1.0e-5
+  cht_straight_fin:
+    tolerance_floor: 0.03       # textbook worked example (Incropera Eq. 3.78)
+    residual_floor: 1.0e-5
 
 # Stage 3+ additions (placeholders — no real values yet):
 #   starccm_2402_compatibility: "yes"

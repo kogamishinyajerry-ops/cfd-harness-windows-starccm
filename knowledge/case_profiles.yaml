@@ -18,10 +18,21 @@
 #                     the harness which subcommand pattern to use
 #   macros          — list of case-specific Java macros
 #   expected_outputs — files the macro is expected to write
+#   status          — solver-agnostic per-case status (2026-06-11):
+#                     "wired" (3 anchors; WIN_STARCCM end-to-end green)
+#                     "mock_only" (13 new cases; DEC-006; WIN_STARCCM
+#                        will hit MODE_NOT_APPLICABLE until a macro is
+#                        written — see DEC-006 follow-up 3)
 
-version: 1
+version: 2   # 2026-06-11: 13 placeholder profiles for the new mock-runnable
+             # cases (DEC-006). Each has a TBD sim_path + TBD macro list;
+             # WIN_STARCCM path will refuse until a real macro is added.
 
 profiles:
+  # ============================================================
+  # 3 anchor cases (Stage 4 E2E priority; WIN_STARCCM wired)
+  # ============================================================
+
   # Phase B: lid_driven_cavity — STAR-CCM+ creates the cavity via the
   # LidDrivenCavity.java macro (step 1-2); the path is just where
   # STAR-CCM+ writes the .sim on save (step 10 of the macro).
@@ -29,6 +40,7 @@ profiles:
   # bootstrap (the macro ignores the cylinder and builds the cavity
   # from scratch via the pre-generated STL).
   lid_driven_cavity:
+    status: "wired"
     sim_path: "D:\\StarCCM Codebuddy\\Cases\\Results\\lid_driven_cavity_solved.sim"
     sim_placeholder: "D:\\StarCCM Codebuddy\\Cases\\cyl_vortex_v161R_v26_solved.sim"
     sim_template: null  # macro creates geometry from scratch
@@ -52,6 +64,7 @@ profiles:
   # subcommand spawns STAR-CCM+ with VortexStreet.java; the executor
   # picks this up via the existing _CASE_TO_COMMAND routing.
   circular_cylinder_wake:
+    status: "wired"
     sim_path: "D:\\StarCCM Codebuddy\\Cases\\cyl_vortex_v161R_v26_solved.sim"
     sim_template: "vortex-street"  # the CLI subcommand (proven ~11s)
     macros: ["VortexStreet.java"]  # provided by the user's Codebuddy
@@ -64,9 +77,244 @@ profiles:
   # proven by the user). The harness can re-run it with a fresh
   # vortex / AoA if needed.
   naca0012_airfoil:
+    status: "wired"
     sim_path: "D:\\StarCCM Codebuddy\\Cases\\Results\\naca2412_v34_final.sim"
     sim_template: "naca-e2e"  # future Stage C subcommand
     macros: ["CliNaca2412E2E.java"]
     expected_outputs:
       - "D:\\StarCCM Codebuddy\\Cases\\Results\\naca2412_force.txt"
       - "D:\\StarCCM Codebuddy\\Cases\\Results\\naca2412_summary.json"
+
+  # ============================================================
+  # 13 new cases (DEC-006, 2026-06-11) — mock-only profiles.
+  # WIN_STARCCM will return MODE_NOT_APPLICABLE on these until
+  # a Java macro is written (DEC-006 follow-up 3). The 13 cases
+  # are grouped by solver family to make the follow-up work easy
+  # to scope: each family can have a single macro that handles
+  # all the Re / Ra / Pr variants in the family.
+  # ============================================================
+
+  # ---- INTERNAL family: pipe / channel / step (5 new) ----
+  backward_facing_step:
+    status: "mock_only"
+    sim_path: null   # TBD: real macro needed (DEC-006 follow-up 3)
+    sim_template: null
+    macros: []       # e.g. CliBackwardFacingStep.java — NOT YET WRITTEN
+    solver_family: "internal_segregated_simple"
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\backward_facing_step_summary.json"
+
+  backward_facing_step_steady:
+    status: "mock_only"
+    sim_path: null
+    sim_template: null
+    macros: []       # shares macro with backward_facing_step (Re scan)
+    solver_family: "internal_segregated_simple"
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\backward_facing_step_steady_summary.json"
+
+  duct_flow:
+    status: "mock_only"
+    sim_path: null
+    sim_template: null
+    macros: []       # CliDuctFlow.java — small, analytical; 1-day target
+    solver_family: "internal_segregated_simple"
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\duct_flow_summary.json"
+
+  fully_developed_plane_channel_flow:
+    status: "mock_only"
+    sim_path: null
+    sim_template: null
+    macros: []       # analytical 2D parabola; the SIMPLEST real-solver macro
+    solver_family: "internal_segregated_simple"
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\channel_summary.json"
+
+  plane_channel_flow:
+    status: "mock_only"
+    sim_path: null
+    sim_template: null
+    macros: []       # DNS-grade mesh; large macro, defer to Stage 3+ Phase E
+    solver_family: "internal_coupled_komega_sst"
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\plane_channel_summary.json"
+
+  # ---- EXTERNAL family (4 new) ----
+  axisymmetric_impinging_jet:
+    status: "mock_only"
+    sim_path: null
+    sim_template: null
+    macros: []
+    solver_family: "external_coupled_komega_sst"
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\axisymmetric_impinging_jet_summary.json"
+
+  cylinder_crossflow:
+    status: "mock_only"
+    sim_path: "D:\\StarCCM Codebuddy\\Cases\\cyl_vortex_v161R_v26_solved.sim"   # reuse the Re=200 sim, but Rerun with new BC
+    sim_template: "vortex-street"   # likely reuses the proven VortexStreet.java with different Re
+    macros: ["VortexStreet.java"]
+    solver_family: "external_unsteady_piso"
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\cylinder_crossflow_summary.json"
+    # NOTE: cylinder_crossflow is the Re=3900 variant of the Re=200 anchor.
+    # DEC-006 follow-up 3 candidate: add a Re argument to VortexStreet.java
+    # and route via mesh_density or a new parameter.
+
+  impinging_jet:
+    status: "mock_only"
+    sim_path: null
+    sim_template: null
+    macros: []
+    solver_family: "external_coupled_komega_sst"
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\impinging_jet_summary.json"
+
+  turbulent_flat_plate:
+    status: "mock_only"
+    sim_path: null
+    sim_template: null
+    macros: []
+    solver_family: "external_coupled_komega_sst"
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\turbulent_flat_plate_summary.json"
+
+  # ---- NATURAL_CONVECTION family (2 new) ----
+  differential_heated_cavity:
+    status: "mock_only"
+    sim_path: null
+    sim_template: null
+    macros: []       # similar to LDC but with T BCs + Boussinesq; shares
+                     # cavity geometry (step1-2 of LidDrivenCavity.java) +
+                     # adds the Boussinesq continuum + T BCs.
+    solver_family: "natural_convection_boussinesq"
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\dhc_summary.json"
+
+  rayleigh_benard_convection:
+    status: "mock_only"
+    sim_path: null
+    sim_template: null
+    macros: []
+    solver_family: "natural_convection_boussinesq_unsteady"
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\rb_summary.json"
+
+  # ---- CONJUGATE family (2 new) ----
+  cht_pipe_gnielinski:
+    status: "mock_only"
+    sim_path: null
+    sim_template: null
+    macros: []
+    solver_family: "conjugate_multi_region_coupled"
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\cht_pipe_summary.json"
+
+  cht_straight_fin:
+    status: "mock_only"
+    sim_path: null
+    sim_template: null
+    macros: []
+    solver_family: "conjugate_multi_region_coupled"
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\cht_fin_summary.json"
+
+  # ============================================================
+  # 4 rotor-family profiles (P2 7月期 stub, 2026-06-12).
+  # verdict-2026-07 §5.2 D-4: 7月底前 scaffold fan_blade.py entry;
+  # these 4 profile entries are the case_solve/fan_blade.py 路由表.
+  # Status 解释:
+  #   - rotor37_slice / rotor37_single_channel / rotor67_slice
+  #     = WIN_STARCCM 走通需要 8月真机 + Rotor37Slice.java /
+  #     Rotor37SingleChannel.java / Rotor67Slice.java 三个 macro
+  #     (本仓库还没写; CHARTER §4 P0 标 8月初 + 8月底).
+  #   - propeller_open_rotor_slice = 2027-Q3 螺旋桨线占位, 不进
+  #     8-10 月关键路径.
+  # 7 月期 MOCK 端已可走: case_solve/build_case() 读 yaml + 写 stub
+  # .sim placeholder, 不 spawn solver. WIN_STARCCM 端 8 月切.
+  # ============================================================
+
+  # 2D 截面 (2D Blade-to-blade section).
+  # 复用 StarCCMExecutor._CASE_TO_COMMAND["rotor37_slice"] = "run-macro"
+  # + _MACRO_NAME_FOR_CASE["rotor37_slice"] = "Rotor37Slice.java"
+  # (这两个 mapping 由 8 月 fan_blade.py 真实现者补; 7 月期 stub
+  # 仍走 executor._CASE_TO_COMMAND 的 fallback "run" 命令).
+  rotor37_slice:
+    status: "mock_only"
+    sim_path: null   # 8月初 Rotor37Slice.java 落地后填
+    sim_template: null
+    macros: []       # Rotor37Slice.java — TBD (CHARTER §4 P0, 8月)
+    solver_family: "internal_rotating_reference_frame_komega_sst"
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\rotor37_slice_summary.json"
+    # 8 月数据期 ① LHS sweep 的 8-12 变量来源 (Track A §2.3 CST 选型)
+    defaults:
+      section_z: 0.5           # span fraction
+      Re: 3.0e5                 # design point (Suder 1995 Table 1)
+      Ma: 0.7
+      alpha_deg: 0.0
+      mesh_nx: 200
+      mesh_ny: 80
+      iters: 5000
+
+  # 3D 单通道 (single passage; periodic on leading/trailing edges).
+  # 9 月数据期 ② 主入口, 借 Rotor37SingleChannel.java
+  # (DEC-007 NacaTrueE2E.java 7-11 步骨架 + 旋转域).
+  # RotatingReferenceFrame 路径 GREEN (D-7 已 DONE).
+  rotor37_single_channel:
+    status: "mock_only"
+    sim_path: null   # 8月底 Rotor37SingleChannel.java 落地后填
+    sim_template: null
+    macros: []       # Rotor37SingleChannel.java — TBD (CHARTER §4 P0, 8月)
+    solver_family: "internal_rotating_reference_frame_komega_sst"
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\rotor37_single_channel_summary.json"
+    defaults:
+      passages: 1
+      rpm: 17190.0              # design point (Suder 1995 Table 1)
+      Re: 3.0e5
+      Ma: 0.7
+      mesh_cells: 800000
+      iters: 10000
+
+  # Rotor67 2D 截面 (Strazisar 1989, AIAA J. Propulsion 5(4): 406-414).
+  # 8 月数据期 ① 副入口, 与 rotor37_slice 走 Rotor67Slice.java.
+  rotor67_slice:
+    status: "mock_only"
+    sim_path: null
+    sim_template: null
+    macros: []       # Rotor67Slice.java — TBD (8-9 月; 复用 Rotor37Slice.java 骨架)
+    solver_family: "internal_rotating_reference_frame_komega_sst"
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\rotor67_slice_summary.json"
+    defaults:
+      section_z: 0.5
+      Re: 2.6e5                 # Strazisar 1989 Table 1
+      Ma: 0.4
+      alpha_deg: 0.0
+      mesh_nx: 200
+      mesh_ny: 80
+      iters: 5000
+
+  # 螺旋桨开转子 2D 截面 (Propeller open-rotor slice).
+  # 2027-Q3 起, 不进 8-10 月关键路径. 占位用 — 让 case_solve/fan_blade.py
+  # 的"rotor family"路由表有一致 4 entry, 未来插值不破坏 yaml schema.
+  # macros 列表空 = 2027 之前 WIN_STARCCM 走 MOCK-only.
+  propeller_open_rotor_slice:
+    status: "mock_only"
+    sim_path: null
+    sim_template: null
+    macros: []       # PropellerOpenRotorSlice.java — TBD (2027-Q3)
+    solver_family: "external_rotating_reference_frame_komega_sst"
+    expected_outputs:
+      - "D:\\StarCCM Codebuddy\\Cases\\Results\\propeller_open_rotor_slice_summary.json"
+    defaults:
+      section_z: 0.75           # 螺旋桨 75% radius (高升力截面)
+      Re: 1.0e6
+      Ma: 0.5
+      alpha_deg: 5.0
+      mesh_nx: 200
+      mesh_ny: 80
+      iters: 5000
+

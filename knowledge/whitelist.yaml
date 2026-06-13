@@ -1,8 +1,9 @@
 # cfd-harness-windows-starccm · canonical case whitelist
 #
 # Solver-agnostic. The chief engineer uses this list to enumerate the
-# 3 anchor cases for Stage 4 E2E + the 17 cases that the V&V engine
-# supports in Stage 2+ (mock-first).
+# 3 anchor cases for Stage 4 E2E + the 13 additional cases that the
+# V&V engine supports in Stage 2+ (mock-first, DEC-006, 2026-06-11).
+# Total: 16 cases.
 #
 # Schema (per case):
 #   id:           case_id (matches knowledge/gold_standards/<id>.yaml)
@@ -14,7 +15,8 @@
 #   solver_profile: path to the solver profile (Stage 3+)
 #   references:   literature DOI(s) for the gold reference
 
-version: 1
+version: 2   # 2026-06-11: 16 cases (was 17 — see DEC-006; the 17 in v1 was
+             # a miscount; only 13 gold_standards existed pre-DEC-006, not 14)
 
 # 3 anchor cases (Stage 4 E2E priority)
 anchors:
@@ -42,9 +44,10 @@ anchors:
     references:
       - "10.1146/annurev.fluid.28.1.477"  # Williamson 1996
 
-# All 17 cases ported from cfd-harness-unified. The full list lives in
+# All 16 cases ported from cfd-harness-unified. The full list lives in
 # knowledge/gold_standards/; the chief engineer's Stage 4 E2E only
-# touches the 3 anchors above.
+# touches the 3 anchors above. Mock-runnable: yes for all 16 (see
+# DEC-006). Real-solver (WIN_STARCCM) wired: 3 anchors only.
 all_cases:
   - axisymmetric_impinging_jet
   - backward_facing_step

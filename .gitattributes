@@ -1,0 +1,37 @@
+# ── Byte-determinism guard ──────────────────────────────────────────────
+# This repo's core guarantee is a byte-deterministic, signed audit package:
+#   - audit_package.serialize computes a SHA-256 over canonical-serialized
+#     manifests, and
+#   - executor.base.contract_hash = SHA-256(spec_file_sha256 | MODE | VERSION),
+#     where spec_file_sha256 hashes the RAW BYTES of
+#     docs/specs/EXECUTOR_ABSTRACTION.md.
+# With core.autocrlf=true (the contributor default on Windows), a checkout
+# would rewrite LF→CRLF and silently change the spec-file SHA — making the
+# same code emit different contract_hashes on different machines. Pin LF so
+# the stored blobs (and therefore every hash) are byte-identical everywhere.
+* text=auto eol=lf
+
+# Text inputs that feed the signed manifest / the V&V comparator / the spec.
+*.py    text eol=lf
+*.pyi   text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.toml  text eol=lf
+*.cfg   text eol=lf
+*.ini   text eol=lf
+*.txt   text eol=lf
+*.csv   text eol=lf
+*.java  text eol=lf
+
+# Binary / generated — never normalize.
+*.sim   binary
+*.stl   binary
+*.step  binary
+*.stp   binary
+*.ccm   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.class binary

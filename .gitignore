@@ -92,3 +92,52 @@ cli_runner.out
 cli_runner.err
 reports/<case>/<timestamp>/data.json
 reports/<case>/<timestamp>/data.md
+
+# ── Takeover stabilization additions (2026-06-13) ──────────────────────
+# Agent tooling / scratch that must never enter this repo.
+# NOTE: gitignore only treats '#' as a comment at the START of a line —
+# inline comments after a pattern become part of the pattern, so keep
+# every comment on its own line.
+# OpenCode harness node_modules + lockfile (~115 MB)
+.opencode/
+# Mavis scratch plans
+.mavis/
+# javac probe scratch
+.javac_check/
+# compiled probe build leftovers
+probe-build.bak/
+# prior recon run output
+reports_takeover_recon/
+
+# Compiled Java macro artifacts (commit the *.java source, not the *.class)
+*.class
+macros/**/*.class
+
+# Runtime error logs not matched by *.log (e.g. starccm_gui_start.log.err)
+*.log.err
+
+# Regenerable solver / geometry binaries (commit the generator .py, not these)
+Cases/
+stl_samples/
+scripts/*.stl
+scripts/*.step
+scripts/*.stp
+scripts/*.png
+
+# Timestamped V&V run outputs (the literal-path rules above never matched)
+reports/*/[0-9]*T*Z/
+reports/audit/*/[0-9]*T*Z/
+reports/_*.txt
+
+# ── 2026-06-13 takeover stabilization additions ──────────────────────
+# Local workbuddy memory (per-project, regenerated each session).
+# NEVER commit — these contain per-session state, not repo-wide facts.
+.workbuddy/
+
+# DEC-009 hollow-green exclusion: Rotor37Slice2D.java prints DONE and
+# exits 0 while solving nothing (uses the dead
+# AutoMeshDefaultValuesManager.setValue(double) path on 2402 R8, and
+# the geometry is still an LDC placeholder). Committing it would
+# mislead future readers. The 8 月期 real implementation lands in
+# Rotor37SingleChannel.java (per DEC-008 §4 P0).
+macros/Rotor37Slice2D.java

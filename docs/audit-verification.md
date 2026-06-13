@@ -58,3 +58,18 @@ An audit is **accepted** only when ALL hold:
 `trusted` in the audit's `signing` block is advisory; the authoritative
 checks are the HMAC + the `key_id`. A `validated` verdict (`is_validated:true`)
 should only ever be cited from an **accepted, trusted** audit.
+
+## Quality gate
+
+`scripts/quality_gate.py` enforces all of the above in one command (suitable
+for CI / pre-release):
+
+```bash
+python scripts/quality_gate.py            # mock suite + coverage>=85% + trust invariants
+python scripts/quality_gate.py --fast     # trust invariants only (no pytest run)
+```
+
+It runs the mock test suite with a coverage floor and re-asserts the
+load-bearing invariants — the MOCK WARN ceiling, dev-unsigned rejection +
+integrity-only acceptance, and tamper detection — exiting non-zero if any
+guarantee regresses.

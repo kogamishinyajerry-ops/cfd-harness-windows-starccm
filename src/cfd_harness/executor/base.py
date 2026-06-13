@@ -26,6 +26,7 @@ __all__ = [
     "ExecutorAbc",
     "SPEC_VERSION",
     "SPEC_FILE_UNAVAILABLE_SENTINEL",
+    "spec_is_available",
 ]
 
 # Canonical version string pinned in the spec frontmatter at
@@ -61,6 +62,18 @@ def _executor_spec_sha256() -> str:
         return hashlib.sha256(_SPEC_FILE.read_bytes()).hexdigest()
     except OSError:
         return SPEC_FILE_UNAVAILABLE_SENTINEL
+
+
+def spec_is_available() -> bool:
+    """True iff the frozen contract spec was readable when first hashed.
+
+    When False, every ``contract_hash`` is computed over
+    ``SPEC_FILE_UNAVAILABLE_SENTINEL`` instead of the real spec bytes — so
+    the "spec binds the contract" guarantee is degraded and a consumer
+    should treat such audits as spec-unbound. Surfaced by the CLI as a
+    warning.
+    """
+    return _executor_spec_sha256() != SPEC_FILE_UNAVAILABLE_SENTINEL
 
 
 class ExecutorMode(StrEnum):

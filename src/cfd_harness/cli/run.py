@@ -27,7 +27,7 @@ from cfd_harness.executor import (
     MockExecutor,
     WinStarCCMExecutor,
 )
-from cfd_harness.executor.base import ExecutorMode
+from cfd_harness.executor.base import ExecutorMode, spec_is_available
 from cfd_harness.metrics import MetricsAccumulator
 from cfd_harness.models import FlowType, GeometryType, TaskSpec
 from cfd_harness.report_engine import DataCollector, ReportGenerator
@@ -257,6 +257,12 @@ def main(argv: Optional[list] = None) -> int:
     # secret; resolve it from --sign-key / env, else fall back to the
     # explicitly UNTRUSTED dev key (see DEC-010).
     manifest = ManifestBuilder().build(task_spec, run_report, verdict)
+    if not spec_is_available():
+        print(
+            "[audit][WARN] contract spec (docs/specs/EXECUTOR_ABSTRACTION.md) not "
+            "readable; contract_hash is spec-unbound — treat this audit as spec-less.",
+            file=sys.stderr,
+        )
     key_bytes, key_source = _resolve_sign_key(args.sign_key)
     if len(key_bytes) < MIN_KEY_BYTES:
         print(

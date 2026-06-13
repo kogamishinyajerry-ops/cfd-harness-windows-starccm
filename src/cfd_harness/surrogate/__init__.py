@@ -2,24 +2,27 @@
 Surrogate module — CST airfoil parameterization + FFD 3D blade deformation
 + LHS design-of-experiments sampling + watertight-STL builder.
 
-Submodules (solver-agnostic, pure Python + numpy; M3 surrogate track):
+Submodules (solver-agnostic, pure Python + numpy/scikit-learn; M3 track):
 
   cst       — 12-coefficient 2D airfoil (Bernstein basis, Kulfan 2008)
   ffd       — 5x5x5 tensor-product lattice + bend/twist/translate
   lhs       — Latin Hypercube Sampling of the 12-dim CST design space
               (reads bounds from knowledge/gold_standards/rotor37_cst_baseline.yaml)
   builder   — CST 12-vector -> watertight 1-passage STL (trimesh + shapely)
+  data      — SurrogateDataset, Normalizer, split_train_val_test (M3-S3)
+  models    — MLPSurrogate, GPRSurrogate, EnsembleSurrogate (M3-S3)
+  metrics   — R², MAE, RMSE, coverage_ratio evaluation (M3-S4)
+  train     — End-to-end training pipeline + CLI (M3-S3/S4)
 
 High-level API:
     cfd_harness.surrogate.CSTAirfoil.from_vector(vec)  # 12 floats -> 2D outline
     cfd_harness.surrogate.FFDBlade.default_unit()       # 5x5x5 unit lattice
-    cfd_harness.surrogate.lhs.sample_lhs(n, lb, ub)     # (N, 12) LHS samples
-    cfd_harness.surrogate.builder.build_watertight_stl(coeffs)
-                                                       # 12 floats -> trimesh
+    cfd_harness.surrogate.sample_lhs(n, lb, ub)         # (N, 12) LHS samples
+    cfd_harness.surrogate.build_watertight_stl(coeffs)   # 12 floats -> trimesh
+    cfd_harness.surrogate.generate_mock_data(n=100)      # synthetic dataset
+    cfd_harness.surrogate.train(config)                  # full training pipeline
 
-No STAR-CCM+ coupling here. The scripts/ wrappers (scripts/cst_lhs.py,
-scripts/build_r37_from_cst.py, scripts/generate_100_stls.py) are thin
-CLI front-ends over these modules.
+No STAR-CCM+ coupling here — all submodules are pure Python.
 """
 from .cst import (
     CSTAirfoil,
@@ -69,6 +72,38 @@ from .builder import (
     N_OUTLINE_POINTS,
     CHORD_M_DEFAULT,
 )
+from .data import (
+    SurrogateDataset,
+    Normalizer,
+    split_train_val_test,
+    save_dataset,
+    load_dataset,
+    generate_mock_data,
+)
+from .models import (
+    BaseSurrogate,
+    MLPSurrogate,
+    GPRSurrogate,
+    EnsembleSurrogate,
+    create_model,
+)
+from .metrics import (
+    r2 as r2_score,
+    mae,
+    rmse,
+    max_error,
+    relative_error,
+    coverage_ratio,
+    evaluate_per_output,
+    evaluate_all,
+    parity_summary,
+)
+from .train import (
+    TrainingConfig,
+    TrainingResult,
+    train,
+    load_run,
+)
 
 __all__ = [
     # CST
@@ -113,4 +148,32 @@ __all__ = [
     "EXTRUDE_M",
     "N_OUTLINE_POINTS",
     "CHORD_M_DEFAULT",
+    # Data (M3-S3)
+    "SurrogateDataset",
+    "Normalizer",
+    "split_train_val_test",
+    "save_dataset",
+    "load_dataset",
+    "generate_mock_data",
+    # Models (M3-S3)
+    "BaseSurrogate",
+    "MLPSurrogate",
+    "GPRSurrogate",
+    "EnsembleSurrogate",
+    "create_model",
+    # Metrics (M3-S4)
+    "r2_score",
+    "mae",
+    "rmse",
+    "max_error",
+    "relative_error",
+    "coverage_ratio",
+    "evaluate_per_output",
+    "evaluate_all",
+    "parity_summary",
+    # Training (M3-S3/S4)
+    "TrainingConfig",
+    "TrainingResult",
+    "train",
+    "load_run",
 ]

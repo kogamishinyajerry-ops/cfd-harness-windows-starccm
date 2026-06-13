@@ -7,11 +7,27 @@ signatures reproducible.
 from __future__ import annotations
 
 import json
+import unicodedata
 from typing import Any, Dict
 
 from cfd_harness.audit_package.manifest import Manifest
 
 __all__ = ["serialize_manifest", "manifest_to_canonical_dict"]
+
+
+def _nfc(value: Any) -> Any:
+    """Recursively NFC-normalize strings so semantically-identical text
+    signs to identical bytes regardless of the platform's Unicode form
+    (e.g. macOS NFD paths vs Linux NFC). Without this, an untampered
+    manifest could raise a false tamper alarm across machines.
+    """
+    if isinstance(value, str):
+        return unicodedata.normalize("NFC", value)
+    if isinstance(value, list):
+        return [_nfc(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _nfc(v) for k, v in value.items()}
+    return value
 
 
 def manifest_to_canonical_dict(manifest: Manifest) -> Dict[str, Any]:
@@ -41,11 +57,19 @@ def manifest_to_canonical_dict(manifest: Manifest) -> Dict[str, Any]:
 
 
 def serialize_manifest(manifest: Manifest) -> bytes:
-    """Stable byte representation. Sorted keys, no trailing whitespace."""
-    canonical = manifest_to_canonical_dict(manifest)
+    """Stable byte representation. Sorted keys, no trailing whitespace,
+    NFC-normalized strings, and NO non-standard JSON tokens.
+
+    ``allow_nan=False`` makes a stray ``nan``/``inf`` raise ``ValueError``
+    instead of emitting non-RFC-8259 ``NaN``/``Infinity`` tokens that
+    different verifiers parse differently (a non-determinism / false-tamper
+    hazard).
+    """
+    canonical = _nfc(manifest_to_canonical_dict(manifest))
     return json.dumps(
         canonical,
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
+        allow_nan=False,
     ).encode("utf-8")

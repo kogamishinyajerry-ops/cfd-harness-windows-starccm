@@ -23,10 +23,13 @@ from cfd_harness.models import TaskSpec
 __all__ = ["Manifest", "ManifestBuilder"]
 
 
-# Bump this when the manifest shape changes. The signature is bound
-# to a specific SCHEMA_VERSION; bumping it invalidates all
-# previously-signed manifests (intended — the contract has moved).
-SCHEMA_VERSION = 1
+# Bump this when the manifest shape OR the signing scheme changes. The
+# signature is bound to a specific SCHEMA_VERSION; bumping it invalidates
+# all previously-signed manifests (intended — the contract has moved).
+#   v1 -> v2 (2026-06-13, DEC-010): signing hardened — key_id binding,
+#   timestamp bound into the payload, >=32-byte keys. Old v1 signatures no
+#   longer verify (they were all dev-key / untrusted anyway).
+SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)

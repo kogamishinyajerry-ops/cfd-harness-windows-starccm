@@ -24,7 +24,7 @@ def test_cli_lid_driven_cavity_mock_passes(ldc_task_spec, tmp_path, repo_root):
         "--case", "lid_driven_cavity",
         "--executor", "mock",
         "--output", str(tmp_path / "reports"),
-        "--sign-key", "test-only-key",
+        "--sign-key", "test-only-key-padded-to-at-least-32-bytes",
     ]
     rc = main(argv)
     assert rc == 0
@@ -43,7 +43,7 @@ def test_cli_naca0012_mock(cylinder_task_spec, tmp_path):
         "--case", "naca0012_airfoil",
         "--executor", "mock",
         "--output", str(tmp_path / "reports"),
-        "--sign-key", "test-only-key",
+        "--sign-key", "test-only-key-padded-to-at-least-32-bytes",
     ]
     rc = main(argv)
     assert rc == 0
@@ -56,7 +56,7 @@ def test_cli_circular_cylinder_wake_mock(tmp_path):
         "--case", "circular_cylinder_wake",
         "--executor", "mock",
         "--output", str(tmp_path / "reports"),
-        "--sign-key", "test-only-key",
+        "--sign-key", "test-only-key-padded-to-at-least-32-bytes",
     ]
     rc = main(argv)
     assert rc == 0
@@ -80,7 +80,7 @@ def test_cli_win_starccm_stub(tmp_path):
         "--case", "lid_driven_cavity",
         "--executor", "win_starccm",
         "--output", str(tmp_path / "reports"),
-        "--sign-key", "test-only-key",
+        "--sign-key", "test-only-key-padded-to-at-least-32-bytes",
     ]
     rc = main(argv)
     # Refusal → not validated → exit 1

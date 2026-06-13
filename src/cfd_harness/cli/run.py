@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -17,6 +19,7 @@ from typing import Optional
 from cfd_harness.auto_verifier import AutoVerifier
 from cfd_harness.auto_verifier.config import VerifierConfig
 from cfd_harness.audit_package import ManifestBuilder, Signer
+from cfd_harness.audit_package.sign import MIN_KEY_BYTES
 from cfd_harness.executor import (
     DockerOpenFOAMExecutor,
     FutureRemoteExecutor,
@@ -154,10 +157,50 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--sign-key",
-        default="cfd-harness-dev-key",
-        help="HMAC key for the audit manifest signer (default: dev key; override in prod)",
+        default=None,
+        help=(
+            "HMAC key for the audit manifest signer. Prefer the "
+            f"{_SIGN_KEY_ENV} env var. If neither is set, an UNTRUSTED "
+            "dev-unsigned key is used (audit marked trusted=false)."
+        ),
     )
     return p
+
+
+# Env var that supplies the production HMAC signing key (preferred over a
+# CLI flag, which leaks into shell history / process listings).
+_SIGN_KEY_ENV = "CFD_HARNESS_SIGN_KEY"
+
+# An explicitly UNTRUSTED, labelled dev key used only when no real key is
+# supplied. It is >= MIN_KEY_BYTES so the Signer accepts it, but audits
+# signed with it are stamped key_source="dev-unsigned", trusted=false, and
+# carry a well-known key_id that a verifier MUST reject. It exists so mock /
+# CI smoke runs (which can never be `validated` anyway) still produce an
+# audit file — it is NOT a production secret. See DEC-010.
+_DEV_UNSIGNED_KEY = b"cfd-harness-DEV-UNSIGNED-do-not-trust-key-000000"
+
+# case_id flows into the audit_dir path; constrain it so a programmatic
+# caller (TaskSpec has no field validation) cannot traverse out of the tree.
+_SAFE_CASE_ID = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
+
+
+def _resolve_sign_key(cli_key: Optional[str]) -> tuple[bytes, str]:
+    """Resolve the HMAC signing key and its provenance.
+
+    Priority: --sign-key > $CFD_HARNESS_SIGN_KEY > the dev-unsigned key.
+    Returns (key_bytes, key_source) where key_source is "provided" or
+    "dev-unsigned".
+    """
+    key_str = cli_key or os.environ.get(_SIGN_KEY_ENV)
+    if key_str:
+        return key_str.encode("utf-8"), "provided"
+    return _DEV_UNSIGNED_KEY, "dev-unsigned"
+
+
+def _safe_case_id(case_id: str) -> str:
+    if not _SAFE_CASE_ID.match(case_id):
+        raise ValueError(f"case_id contains unsafe characters for a path: {case_id!r}")
+    return case_id
 
 
 def _make_executor(mode: ExecutorMode):
@@ -215,11 +258,33 @@ def main(argv: Optional[list] = None) -> int:
     for s in verdict.suggestions:
         print(f"  - {s}")
 
-    # Audit
+    # Audit (signed manifest). The HMAC is only trustworthy if the key is
+    # secret; resolve it from --sign-key / env, else fall back to the
+    # explicitly UNTRUSTED dev key (see DEC-010).
     manifest = ManifestBuilder().build(task_spec, run_report, verdict)
-    signer = Signer(args.sign_key.encode("utf-8") if isinstance(args.sign_key, str) else args.sign_key)
+    key_bytes, key_source = _resolve_sign_key(args.sign_key)
+    if len(key_bytes) < MIN_KEY_BYTES:
+        print(
+            f"[error] signing key must be >= {MIN_KEY_BYTES} bytes; got "
+            f"{len(key_bytes)}. Provide a longer --sign-key or {_SIGN_KEY_ENV}.",
+            file=sys.stderr,
+        )
+        return 2
+    if key_source == "dev-unsigned":
+        print(
+            "[audit][WARN] no signing key (--sign-key / $CFD_HARNESS_SIGN_KEY); "
+            "using the DEV-UNSIGNED key — this audit is NOT cryptographically "
+            "trusted (key_source=dev-unsigned, trusted=false).",
+            file=sys.stderr,
+        )
+    signer = Signer(key_bytes)
     signature = signer.sign(manifest)
-    print(f"[audit] manifest.schema_version={manifest.schema_version} contract_hash={manifest.contract_hash[:12]}... sig.hmac[:12]={signature.hmac[:12]}")
+    trusted = key_source == "provided"
+    print(
+        f"[audit] manifest.schema_version={manifest.schema_version} "
+        f"contract_hash={manifest.contract_hash[:12]}... key_id={signature.key_id} "
+        f"trusted={trusted} hmac[:12]={signature.hmac[:12]}"
+    )
 
     # Report
     output_root = Path(args.output)
@@ -251,7 +316,7 @@ def main(argv: Optional[list] = None) -> int:
     # Audit file (signed manifest). Lives under reports/audit/<case>/<ts>/
     # so the data.json + audit.json can be cross-checked independently
     # (byte-deterministic signed audit package is one of the 5 ground rules).
-    audit_dir = output_root / "audit" / task_spec.case_id / data_path.parent.name
+    audit_dir = output_root / "audit" / _safe_case_id(task_spec.case_id) / data_path.parent.name
     audit_dir.mkdir(parents=True, exist_ok=True)
     audit_file = audit_dir / "audit.json"
     audit_payload = {
@@ -259,13 +324,26 @@ def main(argv: Optional[list] = None) -> int:
         "signature": {
             "digest": signature.digest,
             "hmac": signature.hmac,
+            "key_id": signature.key_id,
             "algorithm": signature.algorithm,
             "signed_at": signature.signed_at,
         },
+        # Trust metadata. The AUTHORITATIVE check is key_id vs the verifier's
+        # expected production key fingerprint; `trusted` is advisory. A
+        # production verifier MUST reject any audit whose key_id is the
+        # dev-unsigned key_id (or key_source != "provided").
+        "signing": {
+            "key_source": key_source,        # "provided" | "dev-unsigned"
+            "trusted": trusted,
+            "min_key_bytes": MIN_KEY_BYTES,
+        },
+        # A runnable verification recipe. The secret key must be obtained
+        # out-of-band (it is never written to the audit).
         "verify_recipe": (
-            "from cfd_harness.audit_package import Manifest, Signer; "
-            "from cfd_harness.audit_package.serialize import serialize_manifest; "
-            "ok = Signature(hmac=<hmac>).verify(Manifest(**payload['manifest']), key)"
+            "import json; from cfd_harness.audit_package import Manifest, Signature; "
+            "d = json.load(open('audit.json')); key = b'<your-secret-key>'; "
+            "sig = Signature(**d['signature']); m = Manifest(**d['manifest']); "
+            "assert sig.verify(m, key), 'TAMPERED-OR-WRONG-KEY'"
         ),
     }
     audit_file.write_text(

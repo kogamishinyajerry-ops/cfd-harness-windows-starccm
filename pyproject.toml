@@ -49,6 +49,15 @@ real-solver = [
     # harness is mock-first; install this extra to enable --executor
     # win_starccm on a Windows machine with STAR-CCM+ 2402 installed.
 ]
+surrogate = [
+    # M3 surrogate track (DEC-008) — pure-Python geometry pipeline.
+    # No STAR-CCM+ install needed. Optional so a fresh `pip install -e .`
+    # works without scipy / trimesh / shapely, but the surrogate tests
+    # need this extra.
+    "scipy>=1.10",
+    "trimesh>=4.0",
+    "shapely>=2.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "packages/starccm-bridge/tests"]
@@ -56,6 +65,7 @@ addopts = "-v --tb=short"
 markers = [
     "real_solver: tests that require a real STAR-CCM+ install (deselect with '-m \"not real_solver\"')",
     "plane_enforcement: AST-walking tests that enforce ADR-001",
+    "surrogate: CST/FFD/LHS/builder tests in tests/test_surrogate/ (solver-agnostic, fast)",
 ]
 
 [tool.importlinter]

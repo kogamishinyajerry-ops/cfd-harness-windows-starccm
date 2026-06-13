@@ -71,6 +71,15 @@ class TrainingConfig:
     eval_on_test: bool = True
     compute_std: bool = False                 # GPR uncertainty (expensive)
 
+    # Signed accuracy audit (reuses the DEC-010 chain via surrogate.vv).
+    # OFF by default → no behaviour change. When on, writes
+    # <output_dir>/<name>_audit.json, verifiable with
+    # `python -m cfd_harness.audit_package.verify`. A mock/synthetic-trained
+    # surrogate can never be `validated` (the vv honesty ceiling).
+    emit_audit: bool = False
+    audit_data_source: Optional[str] = None   # "real"|"mock"; None → inferred
+    audit_acceptance: Optional[Any] = None    # vv.SurrogateAcceptance; None → defaults
+
 
 # ---------------------------------------------------------------------------
 # Training result
@@ -86,6 +95,7 @@ class TrainingResult:
     metrics: Dict[str, Any] = field(default_factory=dict)
     elapsed_s: float = 0.0
     model_path: Optional[str] = None
+    audit_path: Optional[str] = None          # set when config.emit_audit
 
     @property
     def summary(self) -> Dict[str, Any]:
@@ -153,12 +163,16 @@ def train(config: TrainingConfig) -> TrainingResult:
         ("val", val_ds, config.eval_on_val),
         ("test", test_ds, config.eval_on_test),
     ]
+    test_true = None  # captured for the optional signed accuracy audit
+    test_pred = None
     for label, ds, enabled in splits:
         if not enabled or ds is None:
             continue
         X = normalizer.transform_inputs(ds.inputs)
         Y_pred_norm = model.predict(X)
         Y_pred = normalizer.inverse_transform_targets(Y_pred_norm)
+        if label == "test":
+            test_true, test_pred = ds.targets, Y_pred
 
         split_metrics = evaluate_all(ds.targets, Y_pred, label=label)
         metrics.update(split_metrics)
@@ -180,6 +194,11 @@ def train(config: TrainingConfig) -> TrainingResult:
     model_name = config.model_name or f"{config.model_type}_{dataset.n_samples}samples"
     model_path = _save_run(model, normalizer, config, metrics, model_name)
 
+    # 7. Optional signed accuracy audit (DEC-010 chain) — off by default.
+    audit_path = None
+    if config.emit_audit and test_true is not None:
+        audit_path = _emit_surrogate_audit(test_true, test_pred, config, model_name)
+
     return TrainingResult(
         model=model,
         normalizer=normalizer,
@@ -187,7 +206,45 @@ def train(config: TrainingConfig) -> TrainingResult:
         metrics=metrics,
         elapsed_s=t1 - t0,
         model_path=model_path,
+        audit_path=audit_path,
     )
+
+
+def _emit_surrogate_audit(test_true, test_pred, config: "TrainingConfig", name: str) -> str:
+    """Write a signed surrogate-accuracy audit for the held-out test set.
+
+    Lazy imports keep the surrogate package's normal import graph unchanged —
+    the audit machinery is only pulled in when emit_audit is requested.
+    data_source is inferred (real if a real dataset was provided, else mock)
+    unless explicitly set; a mock/synthetic-trained surrogate can never be
+    `validated` (the vv honesty ceiling). Verify with
+    `python -m cfd_harness.audit_package.verify <path>`.
+    """
+    from .vv import (
+        SurrogateAcceptance,
+        build_signed_surrogate_audit,
+        evaluate_surrogate,
+        DATA_SOURCE_MOCK,
+        DATA_SOURCE_REAL,
+    )
+    from cfd_harness.audit_package.sign import DEV_UNSIGNED_KEY
+
+    data_source = config.audit_data_source or (
+        DATA_SOURCE_REAL if config.data_path else DATA_SOURCE_MOCK
+    )
+    acceptance = config.audit_acceptance or SurrogateAcceptance()
+    verdict = evaluate_surrogate(test_true, test_pred, acceptance, data_source=data_source)
+
+    key_env = os.environ.get("CFD_HARNESS_SIGN_KEY")
+    if key_env:
+        key, key_source = key_env.encode("utf-8"), "provided"
+    else:
+        key, key_source = DEV_UNSIGNED_KEY, "dev-unsigned"
+
+    audit = build_signed_surrogate_audit(verdict, key, model_id=name, key_source=key_source)
+    audit_path = Path(config.output_dir) / f"{name}_audit.json"
+    audit_path.write_text(json.dumps(audit, indent=2, sort_keys=True), encoding="utf-8")
+    return str(audit_path)
 
 
 def _save_run(
@@ -301,6 +358,12 @@ def _cli_main(argv=None):
                    help="MLP hidden layer sizes (default 256 128 64)")
     p.add_argument("--max-iter", type=int, default=2000,
                    help="MLP max iterations (default 2000)")
+    p.add_argument("--emit-audit", action="store_true",
+                   help="Emit a signed surrogate-accuracy audit (DEC-010); "
+                        "set CFD_HARNESS_SIGN_KEY for a trusted audit")
+    p.add_argument("--audit-data-source", default=None, choices=["real", "mock"],
+                   help="Override audit data_source (default: inferred — real "
+                        "if --data given, else mock; mock can never validate)")
 
     args = p.parse_args(argv)
 
@@ -317,6 +380,8 @@ def _cli_main(argv=None):
         output_dir=args.output,
         model_name=args.name,
         compute_std=args.compute_std,
+        emit_audit=args.emit_audit,
+        audit_data_source=args.audit_data_source,
     )
 
     result = train(config)
@@ -332,6 +397,8 @@ def _cli_main(argv=None):
     print(f"  Test MAE: {result.metrics.get('test_mae', 'N/A'):.6f}")
     print(f"  Test RMSE:{result.metrics.get('test_rmse', 'N/A'):.6f}")
     print(f"  Saved:    {result.model_path}")
+    if result.audit_path:
+        print(f"  Audit:    {result.audit_path}")
     print()
 
     print("Per-output test metrics:")

@@ -372,6 +372,19 @@ class StarCCMExecutor(ExecutorAbc):
         residuals = self._extract_residuals(data)
         # Extract key quantities (typical: data.quantities / data.qoi)
         key_quantities = self._extract_key_quantities(data)
+        # The vortex-street / run commands report only run MARKERS in their
+        # JSON response (done_marker, png_count, ...) and write the real
+        # residuals + force reports to a <stem>_postprocess.json file. If the
+        # response carried no residuals, read them from that file so the V&V
+        # convergence check reflects the ACTUAL solve rather than a false
+        # "no residuals → diverged".
+        pp_note = "postprocess=absent"
+        if not residuals:
+            pp_residuals, pp_kq = self._residuals_from_postprocess(sim_path)
+            if pp_residuals or pp_kq:
+                residuals = pp_residuals or residuals
+                key_quantities = {**key_quantities, **pp_kq}
+                pp_note = f"postprocess=read(residuals={len(pp_residuals)})"
         # success: data.ok or data.success or data.all_ok
         success = bool(data.get("ok", data.get("success", data.get("all_ok", True))))
         # Path to the .sim + log (if reported)
@@ -394,6 +407,7 @@ class StarCCMExecutor(ExecutorAbc):
                 self._REAL_NOTE,
                 f"codebuddy_command={resp.command}",
                 f"codebuddy_elapsed_s={resp.elapsed_s:.2f}",
+                pp_note,
             ),
         )
 
@@ -429,6 +443,47 @@ class StarCCMExecutor(ExecutorAbc):
             if isinstance(v, (int, float)):
                 out[str(k)] = v
         return out
+
+    @staticmethod
+    def _residuals_from_postprocess(sim_path: Path) -> tuple:
+        """Read real residuals + force reports from a vortex-street / run
+        ``<stem>_postprocess.json`` (written to ``Cases/Results``).
+
+        Returns ``(residuals, key_quantities)``; both empty if the file is
+        absent/unreadable. Residuals are taken FAITHFULLY from every
+        ResidualMonitor's last value (no cherry-picking — the convergence
+        floor then applies uniformly). Force reports (``drag_lift``) are
+        surfaced as ``force_Fx/Fy/Fz``; if all are ~0 they are flagged
+        ``force_reports_zero`` — STAR-CCM+'s report binding returns a
+        sentinel here (see DEC-005), so they must NOT be trusted as real
+        drag/lift.
+        """
+        pp_path = sim_path.parent / "Results" / f"{sim_path.stem}_postprocess.json"
+        if not pp_path.exists():
+            return {}, {}
+        try:
+            import json as _json
+            pp = _json.loads(pp_path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}, {}
+        residuals: dict = {}
+        for mon in (pp.get("monitors", {}) or {}).get("items", []) or []:
+            if mon.get("type") == "ResidualMonitor":
+                last = mon.get("last")
+                if isinstance(last, (int, float)) and not isinstance(last, bool):
+                    residuals[str(mon.get("name", "?"))] = float(last)
+        kq: dict = {"postprocess_source": pp_path.name}
+        dl = pp.get("drag_lift")
+        if isinstance(dl, dict):
+            forces = {
+                f"force_{k}": float(dl[k])
+                for k in ("Fx", "Fy", "Fz")
+                if isinstance(dl.get(k), (int, float)) and not isinstance(dl.get(k), bool)
+            }
+            kq.update(forces)
+            if forces and all(abs(v) < 1e-12 for v in forces.values()):
+                kq["force_reports_zero"] = True  # sentinel — DEC-005
+        return residuals, kq
 
     @staticmethod
     def _mesh_density_to_iters(mesh_density: str) -> int:

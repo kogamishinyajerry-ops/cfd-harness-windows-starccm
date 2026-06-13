@@ -13,6 +13,7 @@ Submodules (solver-agnostic, pure Python + numpy/scikit-learn; M3 track):
   models    — MLPSurrogate, GPRSurrogate, EnsembleSurrogate (M3-S3)
   metrics   — R², MAE, RMSE, coverage_ratio evaluation (M3-S4)
   train     — End-to-end training pipeline + CLI (M3-S3/S4)
+  optimize  — NSGA-II multi-objective Pareto optimization (M3-S5)
 
 High-level API:
     cfd_harness.surrogate.CSTAirfoil.from_vector(vec)  # 12 floats -> 2D outline
@@ -21,6 +22,7 @@ High-level API:
     cfd_harness.surrogate.build_watertight_stl(coeffs)   # 12 floats -> trimesh
     cfd_harness.surrogate.generate_mock_data(n=100)      # synthetic dataset
     cfd_harness.surrogate.train(config)                  # full training pipeline
+    cfd_harness.surrogate.optimize_pareto(model, norm)   # NSGA-II Pareto front
 
 No STAR-CCM+ coupling here — all submodules are pure Python.
 """
@@ -104,6 +106,17 @@ from .train import (
     train,
     load_run,
 )
+from .optimize import (
+    ParetoFront,
+    SurrogateOptimizationProblem,
+    optimize_pareto,
+    optimize_from_training,
+    hypervolume,
+    compare_fronts,
+    DEFAULT_BOUNDS_LOWER as OPT_DEFAULT_BOUNDS_LOWER,
+    DEFAULT_BOUNDS_UPPER as OPT_DEFAULT_BOUNDS_UPPER,
+    BASELINE_COEFFS,
+)
 
 __all__ = [
     # CST
@@ -176,4 +189,14 @@ __all__ = [
     "TrainingResult",
     "train",
     "load_run",
+    # Optimization (M3-S5)
+    "ParetoFront",
+    "SurrogateOptimizationProblem",
+    "optimize_pareto",
+    "optimize_from_training",
+    "hypervolume",
+    "compare_fronts",
+    "OPT_DEFAULT_BOUNDS_LOWER",
+    "OPT_DEFAULT_BOUNDS_UPPER",
+    "BASELINE_COEFFS",
 ]

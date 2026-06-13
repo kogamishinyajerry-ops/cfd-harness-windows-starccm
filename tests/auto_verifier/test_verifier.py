@@ -88,6 +88,39 @@ def test_executor_refusal_is_fail(ldc_task_spec, gold_root, thresholds_path):
     assert any("executor" in s.category for s in v.suggestions)
 
 
+def test_mock_ceiling_clamps_pass_to_warn(ldc_task_spec):
+    """A MOCK verdict that would otherwise be PASS MUST be clamped to WARN
+    at the ``.level`` field itself (not merely flagged), so a mock can never
+    publish PASS into the signed audit manifest / metrics / report. The
+    identical REAL verdict is left untouched.
+
+    Regression guard for the §6.1 ceiling: before this, verdict.level was
+    computed with no mock downgrade and only ``is_validated`` honored the
+    'never PASS' contract — verdict_level=PASS could enter the signed
+    manifest for a clean mock.
+    """
+    from cfd_harness.auto_verifier.verifier import Verdict
+    from cfd_harness.auto_verifier.gold_standard_comparator import ComparisonResult
+    from cfd_harness.auto_verifier.convergence_checker import ConvergenceChecker
+    from cfd_harness.auto_verifier.physics_checker import PhysicsChecker
+
+    all_pass_cmp = ComparisonResult(all_pass=True, failing_quantities=[])
+    conv = ConvergenceChecker(1e-3).check({"p": 1e-9})  # all_pass=True
+    phys = PhysicsChecker().check(ldc_task_spec)
+
+    mock_v = Verdict(level="PASS", comparison=all_pass_cmp, convergence=conv,
+                     physics=phys, suggestions=[], is_mock=True)
+    assert mock_v.level == "WARN", "a MOCK PASS must clamp to WARN"
+    assert mock_v.mock_ceiling_applied is True
+    assert mock_v.is_validated is False
+
+    real_v = Verdict(level="PASS", comparison=all_pass_cmp, convergence=conv,
+                     physics=phys, suggestions=[], is_mock=False)
+    assert real_v.level == "PASS", "a REAL PASS must NOT be clamped"
+    assert real_v.mock_ceiling_applied is False
+    assert real_v.is_validated is True
+
+
 def test_no_gold_anchor_yields_fail(ldc_task_spec, thresholds_path):
     """A run with no gold_anchor MUST yield verdict.level=FAIL (or WARN
     with no-anchor warning)."""

@@ -501,8 +501,12 @@ class StarCCMExecutor(ExecutorAbc):
         else:
             key_quantities["csv_not_found"] = str(csv_path)
 
-        # Parse summary.json → residuals (if macro reports them)
+        # Parse summary.json → residuals (if macro reports them) + a
+        # fail-closed plausibility gate on any reported force coefficients.
         residuals: dict = {}
+        plausible = True        # overall summary plausibility (diagnostic flag)
+        coeff_plausible = True  # force coefficients sane (or none reported)
+        run_ok_false = False    # macro explicitly reported run_ok=false
         if summary_path.exists():
             try:
                 import json as _json
@@ -519,6 +523,44 @@ class StarCCMExecutor(ExecutorAbc):
                     "iters_requested": summary.get("iters_requested"),
                     "elapsed_sec": summary.get("elapsed_sec"),
                 }
+                # --- fail-closed plausibility gate -------------------------
+                # A macro may report run_ok=true while the field read-out is a
+                # sentinel: the STAR-CCM+ 2402 R8 ForceCoefficientReport bug
+                # returns Cl=8.52 / Cd=-0.41 (physically impossible) yet
+                # run_ok=true. Never launder such a summary into a successful
+                # ExecutionResult — extract the coefficients, quarantine them
+                # if implausible, and fail closed. See DEC-005.
+                force_coeffs: dict = {}
+                for canon, aliases in (
+                    ("cl", ("cl", "Cl", "CL", "lift_coefficient")),
+                    ("cd", ("cd", "Cd", "CD", "drag_coefficient")),
+                    ("cm", ("cm", "Cm", "CM", "moment_coefficient")),
+                ):
+                    for alias in aliases:
+                        v = summary.get(alias)
+                        if isinstance(v, (int, float)) and not isinstance(v, bool):
+                            force_coeffs[canon] = float(v)
+                            break
+                coeff_reasons: List[str] = []
+                if "cl" in force_coeffs and abs(force_coeffs["cl"]) > 3.0:
+                    coeff_reasons.append(f"|cl|={force_coeffs['cl']:.3f}>3")
+                if "cd" in force_coeffs and force_coeffs["cd"] < 0.0:
+                    coeff_reasons.append(f"cd={force_coeffs['cd']:.4f}<0")
+                coeff_plausible = not coeff_reasons
+                run_ok_false = (summary.get("run_ok") is False)
+                reasons = list(coeff_reasons)
+                if run_ok_false:
+                    reasons.append("run_ok=false")
+                plausible = not reasons
+                key_quantities["_macro_summary"]["plausible"] = plausible
+                if reasons:
+                    key_quantities["_macro_summary"]["implausible_reasons"] = reasons
+                if force_coeffs:
+                    # Plausible coefficients are surfaced for V&V; implausible
+                    # ones are quarantined so they can never be compared as if
+                    # they were validated.
+                    bucket = "force_coefficients" if coeff_plausible else "force_coefficients_quarantined"
+                    key_quantities[bucket] = force_coeffs
             except Exception as e:
                 key_quantities["summary_parse_error"] = str(e)
 
@@ -528,7 +570,13 @@ class StarCCMExecutor(ExecutorAbc):
         raw_output = str(sim_out) if sim_out.exists() else str(sim_path)
 
         result = ExecutionResult(
-            success=bool(key_quantities.get("u_centerline")) or bool(key_quantities.get("_macro_summary")),
+            # Fail closed: a run_ok=false summary vetoes everything; an
+            # implausible force coefficient only quarantines the coefficient
+            # path — it does NOT veto an independent u_centerline measurement.
+            success=(
+                bool(key_quantities.get("u_centerline"))
+                or (bool(key_quantities.get("_macro_summary")) and coeff_plausible)
+            ) and not run_ok_false,
             is_mock=False,
             residuals=residuals,
             key_quantities=key_quantities,
@@ -546,6 +594,7 @@ class StarCCMExecutor(ExecutorAbc):
                 f"run_macro_ok:macro={Path(resp.data.get('macro_path','')).name}",
                 f"run_macro_elapsed_s={resp.elapsed_s:.2f}",
                 f"csv={csv_path.exists()},summary={summary_path.exists()}",
+                f"summary_plausible={plausible}",
             ),
         )
 

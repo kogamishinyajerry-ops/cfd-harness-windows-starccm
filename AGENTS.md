@@ -118,6 +118,22 @@ new top-level file. Trigger wins on conflict.
 | `docs/adr/` | ported verbatim | four-plane law (solver-agnostic) |
 | `.planning/decisions/` (431 DECs) | **not ported** | fresh `.planning/STATE.md` starts empty |
 
+> **As of 2026-06-13 (track-d-repo-gap, corrected)**: of the 5 "Stage 3+"
+> rows (lines 103-107), **`case_solve/` now exists** (a `fan_blade.py`
+> stub + `__init__.py`, tests green); `case_extractors/` /
+> `case_visualize/` / `mesh_quality/` / `physics/` are still **planned but
+> physically un-scaffolded**. `src/cfd_harness/starccm_adapter/` currently
+> has `__init__.py`, `executor.py`, `geometry/`, and `case_solve/`. The
+> authoritative roadmap for the remaining subdirs is
+> **`reports/research/commercial-fan-prop/planning/CHARTER.md` §4** (lists
+> 3 of 5 with P0/P1/P2 priorities + trigger months). (The earlier
+> "currently has only __init__/executor/geometry" wording predated the
+> untracked `case_solve/` work.)
+> The full 15-item ROI list with critical-path markers is at
+> `reports/research/commercial-fan-prop/planning/track-d-deliverable.md`
+> §3. When a future task says "the N empty subdirs", do not assume
+> they exist — re-enumerate.
+
 ## Inherited user-level rules
 
 `~/.mavis/AGENTS.md` governs (v2.3 baseline):

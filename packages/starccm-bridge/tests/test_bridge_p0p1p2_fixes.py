@@ -64,6 +64,14 @@ class TestClassifySpawnError:
         stderr = "ERROR: Version mismatch between macro (R8) and solver (R6)"
         assert _classify_spawn_error(stderr, "", 1) == "VERSION_MISMATCH"
 
+    def test_version_mismatch_requires_version_word_with_incompatible(self):
+        # Guards the parenthesized precedence of the VERSION_MISMATCH rule:
+        #   'version mismatch' OR ('incompatible' AND 'version').
+        # A bare 'incompatible' (no 'version') must NOT classify as
+        # VERSION_MISMATCH; 'incompatible ... version' must.
+        assert _classify_spawn_error("file is incompatible", "", 1) != "VERSION_MISMATCH"
+        assert _classify_spawn_error("incompatible solver version", "", 1) == "VERSION_MISMATCH"
+
     def test_macro_compile_error_with_symbol(self):
         stderr = "Foo.java:42: error: cannot find symbol\n  location: class Bar"
         assert _classify_spawn_error(stderr, "", 1) == "MACRO_COMPILE_ERROR"

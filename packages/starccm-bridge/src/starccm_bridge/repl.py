@@ -141,7 +141,7 @@ def _classify_spawn_error(stderr: str, stdout: str, returncode: int) -> str:
     blob_low = blob.lower()
     if "cannot open file" in blob_low or "specify -new" in blob_low:
         return "SIM_LOCK"
-    if "version mismatch" in blob_low or "incompatible" in blob_low and "version" in blob_low:
+    if "version mismatch" in blob_low or ("incompatible" in blob_low and "version" in blob_low):
         return "VERSION_MISMATCH"
     if "error:" in blob_low and ("symbol" in blob_low or "location:" in blob_low or ".java:" in blob_low):
         return "MACRO_COMPILE_ERROR"
@@ -267,7 +267,9 @@ class CodebuddyRepl:
                 [self.python_executable, str(self.cli_script),
                  "use-version", "--json"],
                 cwd=str(self.codebuddy_path),
-                capture_output=True, text=True, timeout=15, check=False,
+                capture_output=True, text=True,
+                encoding="utf-8", errors="replace",  # CJK-safe (see C-1.1)
+                timeout=15, check=False,
             )
         except (subprocess.TimeoutExpired, OSError):
             return None
@@ -314,6 +316,8 @@ class CodebuddyRepl:
                 env=_make_env(),
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=timeout,
                 check=False,
             )
@@ -571,6 +575,8 @@ class CodebuddyRepl:
                 env=spawn_env,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",        # CJK-safe decode (see C-1.1); STAR-CCM+
+                errors="replace",        # stderr can carry GBK/UTF-8 bytes
                 timeout=timeout_s,
                 check=False,
             )
@@ -592,67 +598,6 @@ class CodebuddyRepl:
                 ),
             ) from e
         elapsed = time.monotonic() - t0
-        ok = proc.returncode == 0
-        return CodebuddyResponse(
-            ok=ok,
-            command=f"run_macro({Path(macro_path).name})",
-            timestamp="",
-            version="",
-            data={
-                "sim_path": str(sim_path),
-                "macro_path": str(macro_path),
-                "starccm_bat": str(starccm_bat),
-                "returncode": proc.returncode,
-                "error_code": _classify_spawn_error(
-                    proc.stderr or "", proc.stdout or "", proc.returncode
-                ),
-            },
-            error=(
-                None if ok
-                else f"STAR-CCM+ returned RC={proc.returncode}; "
-                     f"stderr_head={proc.stderr[:_STDERR_HEAD_CHARS]!r}"
-            ),
-            returncode=proc.returncode,
-            elapsed_s=elapsed,
-            raw_stdout=proc.stdout or "",
-            raw_stderr=proc.stderr or "",
-        )
-        cmd: List[str] = [str(starccm_bat), str(sim_path), "-batch", str(macro_path)]
-        if macro_args:
-            cmd.append(macro_args)
-        t0 = time.monotonic()
-        try:
-            proc = subprocess.run(
-                cmd,
-                cwd=str(self.codebuddy_path),
-                env=_make_env(),
-                capture_output=True,
-                text=True,
-                timeout=timeout_s,
-                check=False,
-            )
-        except subprocess.TimeoutExpired as e:
-            elapsed = time.monotonic() - t0
-            raise CodebuddyError(
-                f"STAR-CCM+ spawn timed out after {timeout_s}s: macro={macro_path!r}",
-                response=CodebuddyResponse(
-                    ok=False,
-                    command=f"run_macro({Path(macro_path).name})",
-                    timestamp="",
-                    version="",
-                    data={},
-                    error=f"timeout after {timeout_s}s",
-                    returncode=-1,
-                    elapsed_s=elapsed,
-                    raw_stdout=e.stdout or "",
-                    raw_stderr=e.stderr or "",
-                ),
-            ) from e
-        elapsed = time.monotonic() - t0
-        # The macro's stdout is just text (no JSON). We mark this
-        # call as ok if STAR-CCM+ returned RC=0. The real verdict
-        # is in the macro's ``<Results>/<case>_summary.json`` file,
-        # which the executor picks up.
         ok = proc.returncode == 0
         return CodebuddyResponse(
             ok=ok,

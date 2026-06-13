@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from cfd_harness.auto_verifier.config import VerifierConfig
-from cfd_harness.auto_verifier.convergence_checker import ConvergenceChecker
+from cfd_harness.auto_verifier.convergence_checker import ConvergenceChecker, ConvergenceResult
 from cfd_harness.auto_verifier.correction_suggester import CorrectionSuggester, Suggestion
 from cfd_harness.auto_verifier.gold_standard_comparator import (
     ComparisonResult,
@@ -44,21 +44,26 @@ class Verdict:
         self,
         level: str,
         comparison: ComparisonResult,
-        convergence: "ConvergenceResult",
+        convergence: ConvergenceResult,
         physics: PhysicsCheckResult,
         suggestions: List[Suggestion],
         is_mock: bool = False,
     ) -> None:
         if level not in {"PASS", "WARN", "FAIL"}:
             raise ValueError(f"verdict level must be PASS/WARN/FAIL, got {level!r}")
-        self.level = level
         self.comparison = comparison
         self.convergence = convergence
         self.physics = physics
         self.suggestions = suggestions
         self.is_mock = is_mock
-        # Per EXECUTOR_ABSTRACTION §6.1: MOCK is capped at WARN.
+        # Per EXECUTOR_ABSTRACTION §6.1: a MOCK run has no truth source, so
+        # it can never publish PASS. Clamp the level ITSELF (not just record
+        # a flag) so the WARN ceiling shows up everywhere verdict.level flows
+        # — the signed audit manifest, the metrics, and the markdown report.
         self.mock_ceiling_applied = is_mock and level == "PASS"
+        if self.mock_ceiling_applied:
+            level = "WARN"
+        self.level = level
 
     @property
     def is_validated(self) -> bool:

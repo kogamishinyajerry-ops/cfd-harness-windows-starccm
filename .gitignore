@@ -141,3 +141,8 @@ reports/_*.txt
 # mislead future readers. The 8 月期 real implementation lands in
 # Rotor37SingleChannel.java (per DEC-008 §4 P0).
 macros/Rotor37Slice2D.java
+
+# Trained surrogate model binaries (regenerable from the M3 pipeline)
+/models/
+# V&V smoke-run outputs (regenerable; like reports/<case>/<ts>/)
+reports/_smoke/

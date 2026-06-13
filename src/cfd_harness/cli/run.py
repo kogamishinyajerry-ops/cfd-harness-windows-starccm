@@ -19,7 +19,7 @@ from typing import Optional
 from cfd_harness.auto_verifier import AutoVerifier
 from cfd_harness.auto_verifier.config import VerifierConfig
 from cfd_harness.audit_package import ManifestBuilder, Signer
-from cfd_harness.audit_package.sign import MIN_KEY_BYTES
+from cfd_harness.audit_package.sign import MIN_KEY_BYTES, DEV_UNSIGNED_KEY
 from cfd_harness.executor import (
     DockerOpenFOAMExecutor,
     FutureRemoteExecutor,
@@ -171,13 +171,8 @@ def build_parser() -> argparse.ArgumentParser:
 # CLI flag, which leaks into shell history / process listings).
 _SIGN_KEY_ENV = "CFD_HARNESS_SIGN_KEY"
 
-# An explicitly UNTRUSTED, labelled dev key used only when no real key is
-# supplied. It is >= MIN_KEY_BYTES so the Signer accepts it, but audits
-# signed with it are stamped key_source="dev-unsigned", trusted=false, and
-# carry a well-known key_id that a verifier MUST reject. It exists so mock /
-# CI smoke runs (which can never be `validated` anyway) still produce an
-# audit file — it is NOT a production secret. See DEC-010.
-_DEV_UNSIGNED_KEY = b"cfd-harness-DEV-UNSIGNED-do-not-trust-key-000000"
+# The dev-unsigned fallback key lives in audit_package.sign (DEV_UNSIGNED_KEY)
+# so verifiers can recognise it without importing this CLI. See DEC-010.
 
 # case_id flows into the audit_dir path; constrain it so a programmatic
 # caller (TaskSpec has no field validation) cannot traverse out of the tree.
@@ -194,7 +189,7 @@ def _resolve_sign_key(cli_key: Optional[str]) -> tuple[bytes, str]:
     key_str = cli_key or os.environ.get(_SIGN_KEY_ENV)
     if key_str:
         return key_str.encode("utf-8"), "provided"
-    return _DEV_UNSIGNED_KEY, "dev-unsigned"
+    return DEV_UNSIGNED_KEY, "dev-unsigned"
 
 
 def _safe_case_id(case_id: str) -> str:

@@ -31,7 +31,14 @@ from dataclasses import dataclass
 from cfd_harness.audit_package.manifest import Manifest
 from cfd_harness.audit_package.serialize import serialize_manifest
 
-__all__ = ["Signer", "Signature", "key_fingerprint", "MIN_KEY_BYTES"]
+__all__ = [
+    "Signer",
+    "Signature",
+    "key_fingerprint",
+    "MIN_KEY_BYTES",
+    "DEV_UNSIGNED_KEY",
+    "DEV_UNSIGNED_KEY_ID",
+]
 
 # Minimum HMAC key length. HMAC-SHA-256 keys shorter than the block/output
 # size weaken security and invite offline brute-force of captured audits.
@@ -55,6 +62,16 @@ def key_fingerprint(key: bytes) -> str:
     DEV-UNSIGNED key) without knowing the key itself. NOT reversible.
     """
     return hashlib.sha256(_KEYID_SALT + key).hexdigest()[:16]
+
+
+# The explicitly-UNTRUSTED dev fallback key (see DEC-010). It lives here —
+# not in the CLI — so a verifier can recognise/reject its fingerprint
+# WITHOUT importing the CLI (which would be an import cycle). It is >=
+# MIN_KEY_BYTES so the Signer accepts it, but it is NOT a production secret:
+# audits signed with it are stamped key_source="dev-unsigned"/trusted=false
+# and any production verifier MUST reject DEV_UNSIGNED_KEY_ID.
+DEV_UNSIGNED_KEY = b"cfd-harness-DEV-UNSIGNED-do-not-trust-key-000000"
+DEV_UNSIGNED_KEY_ID = key_fingerprint(DEV_UNSIGNED_KEY)
 
 
 @dataclass(frozen=True)

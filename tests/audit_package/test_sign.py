@@ -117,13 +117,12 @@ def test_dev_unsigned_forgery_is_attributable_and_untrusted():
     """The hardened scheme can't stop someone signing with a *known* key,
     but the audit's key_id reveals it was the dev-unsigned key, and it never
     verifies under a real production key (DEC-010 C-1/C-2)."""
-    from cfd_harness.audit_package.sign import key_fingerprint
-    from cfd_harness.cli.run import _DEV_UNSIGNED_KEY
+    from cfd_harness.audit_package.sign import DEV_UNSIGNED_KEY, DEV_UNSIGNED_KEY_ID
 
     forged = _validated_manifest()
-    sig = Signer(_DEV_UNSIGNED_KEY).sign(forged)
+    sig = Signer(DEV_UNSIGNED_KEY).sign(forged)
     # 1) The signature self-identifies the dev key -> a verifier blocklists it.
-    assert sig.key_id == key_fingerprint(_DEV_UNSIGNED_KEY)
+    assert sig.key_id == DEV_UNSIGNED_KEY_ID
     # 2) It does NOT verify under a real production secret.
     prod_key = b"a-real-production-secret-key-of-32+bytes"
     assert sig.verify(forged, prod_key) is False

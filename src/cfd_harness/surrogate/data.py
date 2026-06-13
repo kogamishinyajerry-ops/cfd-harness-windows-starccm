@@ -289,6 +289,167 @@ def generate_mock_data(
     )
 
 
+# ---------------------------------------------------------------------------
+# CSV loading (real solver data interface)
+# ---------------------------------------------------------------------------
+
+# Default column naming conventions for STAR-CCM+ CSV exports
+DEFAULT_INPUT_COLS = [
+    "A1_lower", "A2_lower", "A3_lower", "A4_lower", "A5_lower", "A6_lower",
+    "A7_upper", "A8_upper", "A9_upper", "A10_upper", "A11_upper", "A12_upper",
+]
+DEFAULT_TARGET_COLS = ["Cl", "Cd"]
+
+
+def load_data_from_csv(
+    path: str,
+    input_cols: Optional[list] = None,
+    target_cols: Optional[list] = None,
+    encoding: str = "utf-8",
+    **csv_kwargs,
+) -> SurrogateDataset:
+    """Load surrogate dataset from CSV file.
+
+    The CSV is expected to have columns for 12 CST coefficients + Cl + Cd.
+    Column names are auto-detected from the header, or can be specified
+    explicitly.
+
+    Args:
+        path: path to .csv file
+        input_cols: list of 12 column names for CST coefficients
+        target_cols: list of 2 column names for Cl, Cd
+        encoding: file encoding (default utf-8)
+        **csv_kwargs: passed to np.loadtxt (delimiter, skiprows, etc.)
+
+    Returns:
+        SurrogateDataset with loaded data.
+    """
+    if input_cols is None:
+        input_cols = DEFAULT_INPUT_COLS
+    if target_cols is None:
+        target_cols = DEFAULT_TARGET_COLS
+
+    # Try reading header to auto-detect columns
+    import csv as csv_module
+    try:
+        with open(path, "r", encoding=encoding) as f:
+            reader = csv_module.reader(f)
+            first_line = next(reader)
+    except (StopIteration, UnicodeDecodeError):
+        first_line = None
+
+    # If first line looks like a header (non-numeric), use names
+    is_header = first_line is not None and not any(
+        v.replace(".", "").replace("-", "").replace("e", "").replace("E", "").isdigit()
+        for v in first_line if v.strip()
+    )
+    if is_header:
+        # Load with named columns
+        data = np.genfromtxt(
+            path,
+            delimiter=",",
+            names=True,
+            encoding=encoding,
+            dtype=np.float64,
+            invalid_raise=False,
+            **{k: v for k, v in csv_kwargs.items() if k not in ("names", "dtype")},
+        )
+        # Extract named columns
+        inputs = np.column_stack([data[col] for col in input_cols])
+        targets = np.column_stack([data[col] for col in target_cols])
+    else:
+        # Load as raw array, assume columns in order
+        data = np.loadtxt(path, delimiter=",", dtype=np.float64, **csv_kwargs)
+        n_cols = data.shape[1]
+        if n_cols >= 14:
+            # Columns: first 12 = inputs, next 2 = targets
+            inputs = data[:, :12]
+            targets = data[:, 12:14]
+        elif n_cols == 12:
+            # Only inputs, no targets — targets must be provided externally
+            inputs = data[:, :12]
+            targets = np.full((len(inputs), 2), np.nan)
+        else:
+            raise ValueError(
+                f"CSV has {n_cols} columns, expected 12 (inputs) or 14 (inputs+targets). "
+                f"Please specify input_cols/target_cols explicitly."
+            )
+
+    # Filter out rows with NaN targets
+    valid = np.isfinite(targets).all(axis=1)
+    if not valid.all():
+        n_removed = (~valid).sum()
+        inputs = inputs[valid]
+        targets = targets[valid]
+
+    ds = SurrogateDataset(
+        inputs=inputs,
+        targets=targets,
+        meta={
+            "source": path,
+            "format": "csv",
+            "n_original": len(data),
+            "n_nan_removed": n_removed if "n_removed" in dir() else 0,
+        },
+    )
+    ds.validate()
+    return ds
+
+
+def merge_datasets(*datasets: SurrogateDataset) -> SurrogateDataset:
+    """Concatenate multiple datasets into one.
+
+    All datasets must have the same feature_names and target_names.
+    Metadata from the first dataset is preserved; a merge_count is added.
+    """
+    if not datasets:
+        raise ValueError("At least one dataset required")
+    if len(datasets) == 1:
+        return datasets[0]
+
+    merged_inputs = np.vstack([d.inputs for d in datasets])
+    merged_targets = np.vstack([d.targets for d in datasets])
+    merged_meta = datasets[0].meta.copy() if datasets[0].meta else {}
+    merged_meta["merge_count"] = len(datasets)
+    merged_meta["merge_total_samples"] = int(merged_inputs.shape[0])
+
+    return SurrogateDataset(
+        inputs=merged_inputs,
+        targets=merged_targets,
+        feature_names=datasets[0].feature_names,
+        target_names=datasets[0].target_names,
+        meta=merged_meta,
+    )
+
+
+def dataset_statistics(dataset: SurrogateDataset) -> Dict[str, Any]:
+    """Compute summary statistics for quality inspection.
+
+    Returns a dict with per-feature and per-target stats:
+    mean, std, min, max, q25, q50 (median), q75.
+    """
+    def _stats(arr: np.ndarray) -> Dict[str, list]:
+        return {
+            "mean": arr.mean(axis=0).tolist(),
+            "std": arr.std(axis=0).tolist(),
+            "min": arr.min(axis=0).tolist(),
+            "max": arr.max(axis=0).tolist(),
+            "q25": np.percentile(arr, 25, axis=0).tolist(),
+            "q50": np.percentile(arr, 50, axis=0).tolist(),
+            "q75": np.percentile(arr, 75, axis=0).tolist(),
+        }
+
+    return {
+        "n_samples": dataset.n_samples,
+        "n_features": dataset.n_features,
+        "n_targets": dataset.n_targets,
+        "inputs": _stats(dataset.inputs),
+        "targets": _stats(dataset.targets),
+        "feature_names": list(dataset.feature_names),
+        "target_names": list(dataset.target_names),
+    }
+
+
 __all__ = [
     "SurrogateDataset",
     "Normalizer",
@@ -296,4 +457,9 @@ __all__ = [
     "save_dataset",
     "load_dataset",
     "generate_mock_data",
+    "DEFAULT_INPUT_COLS",
+    "DEFAULT_TARGET_COLS",
+    "load_data_from_csv",
+    "merge_datasets",
+    "dataset_statistics",
 ]

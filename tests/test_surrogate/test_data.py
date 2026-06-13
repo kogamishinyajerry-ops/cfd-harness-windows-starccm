@@ -6,8 +6,11 @@ Tests:
 - Normalizer round-trips correctly
 - save/load round-trip preserves data
 - Validation catches bad inputs
+- CSV loading with header and raw formats
+- Dataset merging and statistics
 """
 
+import os
 import numpy as np
 import pytest
 
@@ -18,6 +21,11 @@ from cfd_harness.surrogate.data import (
     save_dataset,
     load_dataset,
     generate_mock_data,
+    load_data_from_csv,
+    merge_datasets,
+    dataset_statistics,
+    DEFAULT_INPUT_COLS,
+    DEFAULT_TARGET_COLS,
 )
 
 
@@ -212,3 +220,137 @@ class TestSaveLoad:
         assert meta["generator"] == "generate_mock_data"
         assert "feature_names" in meta
         assert "target_names" in meta
+
+
+# ---------------------------------------------------------------------------
+# Real data interface tests (B — data enhancement)
+# ---------------------------------------------------------------------------
+
+class TestCSVLoading:
+    def test_header_csv(self, tmp_path):
+        """CSV with named header columns."""
+        path = str(tmp_path / "test_data.csv")
+        header = ",".join(DEFAULT_INPUT_COLS + DEFAULT_TARGET_COLS)
+        # 5 data rows
+        rows = []
+        rng = np.random.RandomState(42)
+        for _ in range(5):
+            inputs = rng.uniform(-0.15, 0.15, 12)
+            cl = 0.5 + 0.1 * inputs[0]
+            cd = 0.03 + 0.01 * abs(inputs[1])
+            rows.append(",".join(f"{v:.6f}" for v in list(inputs) + [cl, cd]))
+        content = header + "\n" + "\n".join(rows)
+        with open(path, "w") as f:
+            f.write(content)
+
+        ds = load_data_from_csv(path)
+        assert ds.n_samples == 5
+        assert ds.inputs.shape == (5, 12)
+        assert ds.targets.shape == (5, 2)
+        ds.validate()
+
+    def test_header_csv_custom_cols(self, tmp_path):
+        """CSV with non-standard column names."""
+        path = str(tmp_path / "test_custom.csv")
+        custom_inputs = [f"cst_{i}" for i in range(12)]
+        custom_targets = ["lift", "drag"]
+        header = ",".join(custom_inputs + custom_targets)
+        rows = []
+        rng = np.random.RandomState(1)
+        for _ in range(10):
+            vals = rng.uniform(-0.15, 0.15, 12)
+            rows.append(",".join(f"{v:.6f}" for v in list(vals) + [0.5, 0.03]))
+        content = header + "\n" + "\n".join(rows)
+        with open(path, "w") as f:
+            f.write(content)
+
+        ds = load_data_from_csv(
+            path,
+            input_cols=custom_inputs,
+            target_cols=custom_targets,
+        )
+        assert ds.n_samples == 10
+        assert np.allclose(ds.targets[:, 0], 0.5)
+
+    def test_no_header_csv(self, tmp_path):
+        """CSV without header — raw numeric data."""
+        path = str(tmp_path / "test_raw.csv")
+        rng = np.random.RandomState(7)
+        data = rng.uniform(-0.15, 0.15, (8, 12))
+        targets = np.column_stack([0.6 + data[:, 0] * 0.2, 0.03 + np.abs(data[:, 1]) * 0.05])
+        full = np.hstack([data, targets])
+        np.savetxt(path, full, delimiter=",", fmt="%.6f")
+
+        ds = load_data_from_csv(path)
+        assert ds.n_samples == 8
+        assert ds.inputs.shape == (8, 12)
+        assert ds.targets.shape == (8, 2)
+        ds.validate()
+
+    def test_nan_filter(self, tmp_path):
+        """Rows with NaN targets should be filtered."""
+        path = str(tmp_path / "test_nan.csv")
+        header = ",".join(DEFAULT_INPUT_COLS + DEFAULT_TARGET_COLS)
+        rows = []
+        rng = np.random.RandomState(3)
+        for i in range(10):
+            vals = rng.uniform(-0.15, 0.15, 12)
+            if i == 3:
+                cl, cd = "NaN", "inf"
+            elif i == 7:
+                cl, cd = "0.5", ""  # empty = NaN
+            else:
+                cl, cd = f"{0.5:.4f}", f"{0.03:.4f}"
+            rows.append(",".join(f"{v:.6f}" for v in vals) + f",{cl},{cd}")
+        content = header + "\n" + "\n".join(rows)
+        with open(path, "w") as f:
+            f.write(content)
+
+        ds = load_data_from_csv(path)
+        assert ds.n_samples == 8  # 10 - 2 NaN rows
+        ds.validate()
+
+
+class TestMergeDatasets:
+    def test_merge_two(self):
+        ds1 = generate_mock_data(n_samples=30, seed=1)
+        ds2 = generate_mock_data(n_samples=20, seed=2)
+        merged = merge_datasets(ds1, ds2)
+        assert merged.n_samples == 50
+        assert merged.inputs.shape == (50, 12)
+        assert merged.targets.shape == (50, 2)
+        assert merged.meta["merge_count"] == 2
+        assert merged.meta["merge_total_samples"] == 50
+
+    def test_merge_single_is_identity(self):
+        ds = generate_mock_data(n_samples=10)
+        merged = merge_datasets(ds)
+        assert merged.n_samples == ds.n_samples
+        assert np.allclose(merged.inputs, ds.inputs)
+
+    def test_merge_three(self):
+        ds1 = generate_mock_data(n_samples=10, seed=1)
+        ds2 = generate_mock_data(n_samples=10, seed=2)
+        ds3 = generate_mock_data(n_samples=10, seed=3)
+        merged = merge_datasets(ds1, ds2, ds3)
+        assert merged.n_samples == 30
+
+
+class TestDatasetStatistics:
+    def test_all_keys(self):
+        ds = generate_mock_data(n_samples=50)
+        stats = dataset_statistics(ds)
+        assert stats["n_samples"] == 50
+        assert stats["n_features"] == 12
+        assert stats["n_targets"] == 2
+        assert "inputs" in stats
+        assert "targets" in stats
+        for key in ["mean", "std", "min", "max", "q25", "q50", "q75"]:
+            assert key in stats["inputs"]
+            assert key in stats["targets"]
+
+    def test_feature_stats_shape(self):
+        ds = generate_mock_data(n_samples=30)
+        stats = dataset_statistics(ds)
+        assert len(stats["inputs"]["mean"]) == 12
+        assert len(stats["targets"]["mean"]) == 2

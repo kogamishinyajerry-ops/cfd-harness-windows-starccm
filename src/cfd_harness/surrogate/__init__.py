@@ -81,6 +81,11 @@ from .data import (
     save_dataset,
     load_dataset,
     generate_mock_data,
+    DEFAULT_INPUT_COLS,
+    DEFAULT_TARGET_COLS,
+    load_data_from_csv,
+    merge_datasets,
+    dataset_statistics,
 )
 from .models import (
     BaseSurrogate,
@@ -168,6 +173,11 @@ __all__ = [
     "save_dataset",
     "load_dataset",
     "generate_mock_data",
+    "DEFAULT_INPUT_COLS",
+    "DEFAULT_TARGET_COLS",
+    "load_data_from_csv",
+    "merge_datasets",
+    "dataset_statistics",
     # Models (M3-S3)
     "BaseSurrogate",
     "MLPSurrogate",

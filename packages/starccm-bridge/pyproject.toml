@@ -16,7 +16,7 @@ include = ["starccm_bridge*"]
 name = "starccm-bridge"
 version = "0.1.0"
 description = "subprocess wrapper for D:\\StarCCM Codebuddy\\starccm_cli_repl.py (Stage 3+)"
-requires-python = ">=3.12"
+requires-python = ">=3.11"  # match root cfd-harness-windows-starccm; repl.py verified 3.11-clean
 dependencies = []
 
 [project.optional-dependencies]

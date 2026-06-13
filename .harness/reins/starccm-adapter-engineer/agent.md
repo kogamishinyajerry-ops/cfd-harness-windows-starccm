@@ -55,11 +55,101 @@ When promoted to Stage 3+:
 
 - `AGENTS.md` (project + user-level governance)
 - `docs/specs/EXECUTOR_ABSTRACTION.md` (the contract)
+- `docs/specs/SKILL_DISPATCH_WORKFLOW.md` (the macro-registry
+  lookup flow — see §"Pre-implementation skill lookup (hard rule)")
+- `docs/specs/MACRO_REGISTRY_SCHEMA.md` (registry schema)
 - `docs/adr/ADR-001-four-plane-import-enforcement.md` (the four-plane law)
+- `knowledge/macro_registry.yaml` (STAR-CCM+ macro catalog)
 - `src/cfd_harness/executor/base.py` (the ExecutorAbc)
 - `src/cfd_harness/executor/mock.py` (the canonical reference impl)
 - `D:\StarCCM Codebuddy\starccm_cli_repl.py` (the REPL to wrap)
 - `D:\StarCCM Codebuddy\SKILL.md` (the user's documentation)
+
+# Pre-implementation skill lookup (hard rule)
+
+Before the starccm-adapter-engineer writes **any** Java macro, edits
+**any** adapter function, or ships **any** Stage 3+ dispatch, it MUST
+consult `knowledge/macro_registry.yaml` and follow the seven-step
+flow in `docs/specs/SKILL_DISPATCH_WORKFLOW.md`. This rule is the
+counterpart to the chief-engineer's dispatch rule — the chief
+engineer decides *what to dispatch*; the adapter engineer decides
+*which macro to use / extend / write*, and the workflow guarantees
+the two decisions don't drift.
+
+**The three primary actions** (full matrix in spec §5):
+
+1. **`reuse`** — pick an existing registry entry with
+   `status: proven` (or `reference` with first-proof flag). Use the
+   bridge's `run_macro(sim_path, macro_path, args, env)` per the
+   entry's `contract`. DO NOT copy-paste the macro source into a new
+   file; the registry's `path` (or `harness://` overlay) is the
+   single source of truth.
+2. **`extend`** — pick a registry entry whose shape fits, but the
+   contract's `parameters` / `env` / `notes` need a small addition
+   (new AoA branch, new mesh density, new BC type). Apply the patch
+   to the **overlay file** (harness:// path) or to the
+   Codebuddy-resident file if a Codebuddy sweep is in progress.
+   Register the new behavior: bump `tags`, add a `notes:` line, and
+   write a test that, when green, justifies a `reference → proven`
+   bump.
+3. **`write_new`** — only when the registry has no fit (Step 3 of the
+   flow returns nothing). New macros go to the harness overlay
+   `D:\CFD-harness-Windows-StarCCM\macros\`. Register the entry in
+   the registry per the schema's §4.2 write policy — `status:
+   reference` until a real run proves it. Update the
+   `skipped_need_metadata` list in the registry's footer so the
+   next sweep knows about it.
+
+**Trigger conditions** (when the lookup MUST be performed; spec §2):
+
+- Adding a new `.java` macro to the catalog.
+- Writing a new adapter function in `src/cfd_harness/starccm_adapter/`
+  or `packages/starccm-bridge/`.
+- Picking `macro_path` for a `run_macro()` call.
+- Copy-pasting any `.java` snippet from an existing macro into a
+  new file.
+- Debugging a STAR-CCM+ API issue (the canonical reflective probes
+  are `cli_introspect` and `cli_diag_mesh_api` — consult the
+  registry's `case_family: multi, phase: probe` entries first).
+
+**Skip clauses** (when the lookup MAY be skipped; the
+`registry_lookup_record` is still required with `status: skipped`):
+
+- Pure refactor inside an already-located `.java` with no contract
+  change.
+- LLM-offline test work (mocked executor tests, audit signing).
+- MOCK-only changes that don't touch the adapter boundary.
+- Trivial single-line edits to a file the agent has already opened
+  in this session and which was previously registered.
+
+**Recording the decision**: every dispatch — reuse, extend, or
+write_new — MUST leave a `registry_lookup_record` in the task's
+`deliverable.md` (schema in spec §4). The adapter engineer is
+responsible for filling `contract_check`, `chosen_entry`, and
+`post_dispatch_mutation`. The chief engineer ratifies under L0
+(see the chief-engineer prompt §"Pre-implementation skill lookup
+(hard rule)").
+
+**Registry mutations are first-class outcomes**:
+
+- **`reference → proven`**: after a real run, set `verified_by` to
+  the test path + `verified_at` to ISO-8601. The chief engineer
+  signs off.
+- **`reference → deprecated`**: only when the user ratifies. Set
+  `superseded_by` (or `notes:` if no replacement).
+- **New entry**: per schema §4.2 — `status: reference` until proven.
+- **Path drift** (Codebuddy file moved or deleted): flag a
+  `registry_gap_record` per spec §6 so the docs-knowledge-engineer's
+  next sweep can fix it.
+
+**Compatibility with adapter invariants** (forbidden actions
+section above): this rule does not let solver-specific code leak
+outside the adapter boundary — the registry is solver-specific in
+*content* (STAR-CCM+ macros) but solver-agnostic in *format* (a
+YAML the chief engineer reads, never imported by downstream planes
+in the V&V engine). The four-plane law is untouched. The
+mock-first guarantee is preserved — the MOCK executor still works
+without the registry being readable.
 
 # Output format
 

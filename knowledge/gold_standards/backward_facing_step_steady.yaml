@@ -1,0 +1,77 @@
+# Gold Standard — Backward-Facing Step (Steady Re-scan) (STAR-CCM+ 2402 retarget)
+#
+# Based on Armaly, Durst, Pereira & Schönung 1983, J. Fluid Mech. 127, 473-496.
+# Three-Re scan: Re_H ∈ {100, 200, 600}. The steady-state solver (vs. the
+# transient `backward_facing_step` case) is the chief engineer's preferred
+# anchor because it converges faster and matches the same experimental
+# reattachment curve within the steady-state validity range.
+#
+# Solver retarget (2026-06-10, v0.1.0):
+#   Ported from cfd-harness-unified's OpenFOAM `simpleFoam` to STAR-CCM+
+#   2402 Steady Segregated. Reference VALUES unchanged.
+
+quantity: reattachment_length_ratio_Re100
+reference_values:
+  - {value: 3.0, name: Xr_over_H_Re100}
+tolerance: 0.10
+source: "Armaly et al. 1983 — Re_H=100, steady reattachment length"
+literature_doi: "10.1017/S0022112083001119"
+mesh_info:
+  cells: 80000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Segregated"
+  schemes: SIMPLE
+  notes: "Same as backward_facing_step; Re=100 anchor (lower-Re steady case)."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: backward_facing_step_steady
+  Re: 100
+  expansion_ratio: 2.0
+  flow_type: INTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY
+---
+quantity: reattachment_length_ratio_Re200
+reference_values:
+  - {value: 4.5, name: Xr_over_H_Re200}
+tolerance: 0.10
+source: "Armaly et al. 1983 — Re_H=200, steady reattachment length"
+literature_doi: "10.1017/S0022112083001119"
+mesh_info:
+  cells: 80000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Segregated"
+  schemes: SIMPLE
+  notes: "Same as backward_facing_step; Re=200 anchor."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: backward_facing_step_steady
+  Re: 200
+  expansion_ratio: 2.0
+  flow_type: INTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY
+---
+quantity: reattachment_length_ratio_Re600
+reference_values:
+  - {value: 6.10, name: Xr_over_H_Re600}
+tolerance: 0.05
+source: "Armaly et al. 1983 — Re_H=600, steady reattachment length"
+literature_doi: "10.1017/S0022112083001119"
+mesh_info:
+  cells: 80000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Segregated"
+  schemes: SIMPLE
+  notes: "Same as backward_facing_step; Re=600 anchor (primary canonical Re)."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: backward_facing_step_steady
+  Re: 600
+  expansion_ratio: 2.0
+  flow_type: INTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY

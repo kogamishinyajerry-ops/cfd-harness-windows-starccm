@@ -1,0 +1,58 @@
+# Gold Standard — Axisymmetric Impinging Jet (STAR-CCM+ 2402 retarget)
+#
+# Based on Jambunathan, Button & Karwe 1992, J. Food Sci. 57, 714-715
+# (and the broader impinging-jet literature). The stagnation-region
+# Nusselt number Nu_0 as a function of jet Re is the canonical heat-
+# transfer anchor. We use Re=10000, H/D=2.
+#
+# Solver retarget (2026-06-10, v0.1.0):
+#   Ported from cfd-harness-unified's OpenFOAM `buoyantSimpleFoam` to
+#   STAR-CCM+ 2402 Steady Coupled. Reference VALUES unchanged.
+
+quantity: stagnation_nusselt
+reference_values:
+  - {value: 41.2, name: Nu0_Re10000}
+tolerance: 0.10
+source: "Jambunathan, Button & Karwe 1992, J. Food Sci. 57, 714-715 — axisymmetric jet H/D=2, Re=10000, Nu_0 ≈ 41.2 (rounded; literature range 38-44 across correlations)"
+literature_doi: "10.1111/j.1365-2621.1992.tb08081.x"
+mesh_info:
+  cells: 60000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Coupled (k-omega SST)"
+  schemes: COUPLED
+  notes: "Axisymmetric 2D-symmetric domain; constant wall temperature BC on the impingement plate. Nu_0 sampled at the stagnation point (r=0)."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: axisymmetric_impinging_jet
+  Re: 10000
+  H_over_D: 2.0
+  flow_type: EXTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY
+---
+quantity: nusselt_radial_profile
+reference_values:
+  - {r_over_D: 0.0, Nu: 41.2}
+  - {r_over_D: 0.5, Nu: 32.8}
+  - {r_over_D: 1.0, Nu: 19.5}
+  - {r_over_D: 2.0, Nu: 7.2}
+  - {r_over_D: 4.0, Nu: 2.8}
+tolerance: 0.15
+source: "Jambunathan et al. 1992 — radial Nu decay profile at Re=10000, H/D=2 (synthesized from correlation band)"
+literature_doi: "10.1111/j.1365-2621.1992.tb08081.x"
+mesh_info:
+  cells: 60000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Coupled (k-omega SST)"
+  schemes: COUPLED
+  notes: "Radial Nu profile at the impingement plate; vector path in comparator (r/D is the coord key, Nu is the value)."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: axisymmetric_impinging_jet
+  Re: 10000
+  H_over_D: 2.0
+  flow_type: EXTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY

@@ -1,0 +1,1474 @@
+# cfd-harness-windows-starccm · macro registry
+#
+# Authoritative index of the STAR-CCM+ Java macros catalogued under
+# D:\StarCCM Codebuddy\macros\ (the primary source) plus the harness
+# overlay at D:\CFD-harness-Windows-StarCCM\macros\.
+#
+# Schema: docs/specs/MACRO_REGISTRY_SCHEMA.md
+#
+# Catalog scope (as of 2026-06-11):
+#   - 336 .java files in D:\StarCCM Codebuddy\macros\ (top-level + _archive/)
+#   - 1 production macro in D:\CFD-harness-Windows-StarCCM\macros\ (LidDrivenCavity.java)
+#   - 9 probe scratch in D:\CFD-harness-Windows-StarCCM\macros\_probes\
+#
+# This file hand-curates the 53 highest-value entries with full metadata.
+# The remaining macros (mostly probes / diagnostics / scratch / archive)
+# are enumerated in the `skipped_*` lists at the bottom so a future
+# sweep can promote them when they earn metadata.
+#
+# Path convention: paths are relative to the catalog root
+# D:\StarCCM Codebuddy\macros\. Harness-overlay entries use the
+# "harness://<basename>" prefix (see schema §3.3).
+
+version: 1
+
+description: >
+  Catalog of the STAR-CCM+ Java macros that the harness can drive via
+  the Codebuddy REPL bridge (packages/starccm-bridge). The registry
+  serves two purposes:
+    1. Help a new agent find the right macro to call for a given case
+       family + phase (mesh / solve / postprocess / etc.).
+    2. Track status (proven vs reference vs deprecated) so we never
+       claim a macro is "wired" without an audit trail.
+
+source: "D:\\StarCCM Codebuddy\\macros\\ + D:\\CFD-harness-Windows-StarCCM\\macros\\ as of 2026-06-11"
+generated_at: "2026-06-11T09:36:00+08:00"
+curator: "docs-knowledge-engineer"
+
+macros:
+
+  # ============================================================
+  # ANCHOR CASES (Stage 4 E2E priority) — 3 of 3 wired
+  # ============================================================
+
+  - id: lid_driven_cavity_e2e
+    path: "harness://LidDrivenCavity.java"
+    filename: "LidDrivenCavity.java"
+    case_family: lid_driven_cavity
+    phase: full_pipeline
+    intent: "Build LDC geometry from STL, set lid-velocity BC (y_max Inlet + V=1.0 m/s), run 5000 iters segregated, save solved .sim, export u_centerline.csv + summary.json + PNGs."
+    contract:
+      input_kind: stl
+      output_kind: multiple
+      parameters:
+        iter_count: {type: int, default: 5000, description: "from LDC_ITERS env or iters_map(mesh_density)"}
+      env: ["LDC_ITERS"]
+      expected_outputs:
+        - "Cases/Results/lid_driven_cavity_solved.sim"
+        - "Cases/Results/lid_driven_cavity_summary.json"
+        - "Cases/Results/lid_driven_cavity_u_centerline.csv"
+        - "Cases/Results/lid_driven_cavity_sim.log"
+      license_required: STARCCM_POWER
+      approximate_wall_s: 14
+      side_effects:
+        - "saves_sim_to_case_profiles_path"
+        - "force_new_injected_for_lid_driven_cavity (P0.2)"
+        - "post-step export-scene call (P1.3)"
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "packages/starccm-bridge/tests/test_lid_driven_cavity_e2e.py"
+    verified_at: "2026-06-10T00:00:00+08:00"
+    tags: ["k-omega-sst", "steady", "segregated", "ghia-1982-target", "harness-overlay"]
+    notes: >
+      Harness overlay wins on same-name conflict via _resolve_macro_path().
+      BCs: top y_max → InletBoundary + VelocityMagnitudeProfile=1.0 m/s.
+      FF sampling for Ghia 1982 tolerance is BLOCKED on STAR-CCM+ 19.02.009
+      API (DEC-005: no getValue(coord) on PrimitiveFieldFunction, no
+      ProbeManager class). User can manually GUI-verify the saved .sim.
+    line_count: 1032
+    authored_by: kogami
+
+  - id: naca_2412_e2e_v1
+    path: "NacaTrueE2E.java"
+    filename: "NacaTrueE2E.java"
+    case_family: naca0012_airfoil
+    phase: full_pipeline
+    intent: "Real NACA 2412 airfoil end-to-end: import STL + far-field domain, Boolean subtract → fluid region, k-omega SST Steady, 500 iters, extract Cl/Cd from ForceCoefficientReport, save solved .sim."
+    contract:
+      input_kind: stl
+      output_kind: multiple
+      env: []
+      expected_outputs:
+        - "Cases/Results/naca2412_v34_final_sim.log"
+        - "Cases/Results/naca2412_summary.json"
+        - "Cases/Results/naca2412_force.txt"
+        - "Cases/Results/naca2412_v34_final.sim"
+      license_required: STARCCM_POWER
+      approximate_wall_s: 116
+      side_effects:
+        - "force_new True (saves fresh .sim)"
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "reports/STATE.md"
+    verified_at: "2026-06-11T00:30:00+08:00"
+    tags: ["k-omega-sst", "steady", "ladson-1988-target", "force-coefficient"]
+    notes: >
+      Proven path (DEC-007) but V&V comparator still WARN/FAIL vs Ladson
+      1988 gold (Cl=0.235 expected, real result 0.0096). Cause: alpha
+      tilt not yet applied; Re=1e6 not 6e6; mesh coarse. Stage 4
+      Phase E v2 will tighten these. 354+ lines.
+    line_count: 915
+    authored_by: kogami
+
+  - id: naca_2412_cli_v6_placeholder
+    path: "CliNaca2412E2E.java"
+    filename: "CliNaca2412E2E.java"
+    case_family: naca0012_airfoil
+    phase: full_pipeline
+    intent: "Earlier v6 NACA 2412 E2E build with rectangular placeholder body (3D CAD) at AoA=30°. Real NACA 2412 outline via Sketch.createLines succeeded but ExtrusionMerge.execute() failed in 2402."
+    contract:
+      input_kind: none
+      output_kind: modified_sim
+      env: []
+      expected_outputs:
+        - "Cases/Results/naca2412_log.txt"
+        - "Cases/Results/naca2412_summary.json"
+      license_required: STARCCM_POWER
+      approximate_wall_s: 12
+    starccm_version: "19.02.009"
+    status: reference
+    superseded_by: naca_2412_e2e_v1
+    tags: ["k-omega-sst", "steady", "laminar", "aoa-30", "rectangle-placeholder"]
+    notes: >
+      Walks end-to-end but uses rectangular body, not the real NACA 2412
+      airfoil. Kept for archaeology; NacaTrueE2E.java is the canonical
+      real-geometry path. Smoke green (200-iter) per STATE.md Phase C.
+    line_count: 336
+    authored_by: kogami
+
+  - id: vortex_street_v14
+    path: "VortexStreetV161R_V14_ForcesCorrect.java"
+    filename: "VortexStreetV161R_V14_ForcesCorrect.java"
+    case_family: circular_cylinder_wake
+    phase: postprocess
+    intent: "Correct-cylinder-region post-process: read V8 cylinder .sim, pick the fluid region (with Inlet/Outlet), create X/Y ForceReports on the cylinder wall, run 5000 more iters, write CSV time series."
+    contract:
+      input_kind: existing_sim
+      output_kind: csv
+      env: []
+      expected_outputs:
+        - "Cases/Results/v161r_v14.log"
+        - "Cases/Results/cyl_vortex_v161R_v14_forces.csv"
+      license_required: STARCCM_POWER
+      approximate_wall_s: 60
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "packages/starccm-bridge/tests/test_bridge_smoke.py"
+    verified_at: "2026-06-10T00:00:00+08:00"
+    tags: ["k-omega-sst", "unsteady", "force-history", "cylinder-wake"]
+    notes: >
+      V14 fix: prefer region with Inlet/Outlet (Region 2), find Default
+      wall THERE, set ForceReport direction via setDefinition + setComponents
+      (defensive), 2 ReportMonitors (X, Y), read YValues time series.
+    line_count: 411
+    authored_by: kogami
+
+  - id: vortex_street_spawn_root
+    path: "VortexStreet.java"
+    filename: "VortexStreet.java"
+    case_family: circular_cylinder_wake
+    phase: full_pipeline
+    intent: "Open v27 cyl_flow_v9m sim, init, read 8 residuals, create 4 scenes (Velocity / Pressure / TKE / Vorticity), render 4 PNGs to Cases/Results/."
+    contract:
+      input_kind: existing_sim
+      output_kind: png_scene
+      env: []
+      expected_outputs:
+        - "Cases/Results/cyl_vortex_summary.json"
+        - "Cases/Results/cyl_vortex_force.png"
+        - "Cases/Results/cyl_vortex_velocity.png"
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 11
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "packages/starccm-bridge/tests/test_bridge_smoke.py"
+    verified_at: "2026-06-10T00:00:00+08:00"
+    tags: ["k-omega-sst", "unsteady", "piso", "scene-export"]
+    notes: >
+      The "vortex-street" subcommand of the Codebuddy CLI spawns this
+      macro directly. The harness calls it via
+      CodebuddyRepl.vortex_street() — proven 11s wall (Phase A).
+      V12.5 line.
+    line_count: 371
+    authored_by: kogami
+
+  # ============================================================
+  # UTILITY MACROS — phase: probe (read-only introspection)
+  # ============================================================
+
+  - id: cli_probe_v16
+    path: "CliProbe.java"
+    filename: "CliProbe.java"
+    case_family: multi
+    phase: probe
+    intent: "Read-only STAR-CCM+ state probe: dumps sim identity, license, mesh, monitors, reports, scenes, parts to Cases/Results/probe_report.json. NO sim state mutation."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      env: []
+      expected_outputs:
+        - "Cases/Results/probe_report.json"
+      license_required: STARCCM_POST
+      approximate_wall_s: 5
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "packages/starccm-bridge/tests/test_bridge_p0p1p2_fixes.py"
+    verified_at: "2026-06-10T00:00:00+08:00"
+    tags: ["read-only", "json-report", "no-mutation"]
+    notes: >
+      The chief engineer's go-to introspection tool. Used in DEC-005
+      diagnosis. Always safe to call.
+    line_count: 254
+    authored_by: kogami
+
+  - id: cli_license_probe_v16
+    path: "CliLicenseProbe.java"
+    filename: "CliLicenseProbe.java"
+    case_family: multi
+    phase: probe
+    intent: "Explicit license probe: report WHICH STAR-CCM+ operations are license-permitted in current env (solver? geom-export? read-only?)."
+    contract:
+      input_kind: none
+      output_kind: summary_json
+      env: []
+      expected_outputs:
+        - "Cases/Results/license_probe.json"
+      license_required: STARCCM_POST
+      approximate_wall_s: 3
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "packages/starccm-bridge/tests/test_bridge_p0p1p2_fixes.py"
+    verified_at: "2026-06-10T00:00:00+08:00"
+    tags: ["license-check", "pre-flight"]
+    notes: >
+      Call BEFORE running any production macro to confirm the
+      STAR-CCM+ install actually has the solver + design + post
+      licenses the user thinks it has.
+    line_count: 132
+    authored_by: kogami
+
+  - id: cli_introspect
+    path: "CliIntrospect.java"
+    filename: "CliIntrospect.java"
+    case_family: multi
+    phase: probe
+    intent: "Introspect active sim: list all method signatures on key managers (PartManager, ContinuumManager, ModelManager) and try a few common physics-enable patterns to find the right API for STAR-CCM+ 2402."
+    contract:
+      input_kind: existing_sim
+      output_kind: log_only
+      env: []
+      expected_outputs:
+        - "Cases/Results/introspect.log"
+      license_required: STARCCM_POST
+      approximate_wall_s: 3
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["reflective", "api-discovery"]
+    notes: >
+      The "look, I don't know the 2402 API" macro. Use when a
+      compile-time class is missing or renamed.
+    line_count: 104
+    authored_by: kogami
+
+  - id: cli_diag_mesh_api
+    path: "CliDiagMeshAPI.java"
+    filename: "CliDiagMeshAPI.java"
+    case_family: multi
+    phase: probe
+    intent: "Quick diagnostic to enumerate mesh APIs in STAR-CCM+ 2402 — lists MeshManager.getMesh() return type and its method signatures containing 'ell', 'oord', 'alue', etc."
+    contract:
+      input_kind: existing_sim
+      output_kind: log_only
+      env: []
+      license_required: STARCCM_POST
+      approximate_wall_s: 2
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["reflective", "api-discovery", "mesh"]
+    notes: >
+      The mesh-specific version of CliIntrospect. Spawn this when a
+      mesh API you saw on the docs site is missing in 2402.
+    line_count: 55
+    authored_by: kogami
+
+  - id: cli_real_demo_v16
+    path: "CliRealDemo.java"
+    filename: "CliRealDemo.java"
+    case_family: multi
+    phase: postprocess
+    intent: "Real demo mode: use already-solved sim for true visualization/reports. No solver/init/run called. Only read + render. Reads scenes + reports + monitors + geometry stats, writes JSON + PNGs."
+    contract:
+      input_kind: existing_sim
+      output_kind: multiple
+      env: []
+      expected_outputs:
+        - "Cases/Results/<arg0>"
+        - "Cases/Results/*.png"
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 20
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "packages/starccm-bridge/tests/test_bridge_p0p1p2_fixes.py"
+    verified_at: "2026-06-10T00:00:00+08:00"
+    tags: ["read-only", "report-aggregation", "scene-render"]
+    notes: >
+      v16 Phase D. The cleanest way to extract a metric panel from a
+      solved .sim without re-running the solver. Companion macro for
+      win_starccm post-step.
+    line_count: 427
+    authored_by: kogami
+
+  # ============================================================
+  # UTILITY MACROS — phase: mesh (volume / surface mesh gen)
+  # ============================================================
+
+  - id: cli_mesh_gen_v20
+    path: "CliMeshGen.java"
+    filename: "CliMeshGen.java"
+    case_family: multi
+    phase: mesh
+    intent: "Real mesh generation v20 P0: parses STAR-CCM+ stdout log for the trimmer's real cell count, falls back through 8 paths (region.getCellCount / SumReport on CellVolume / VolumeIntegralReport / reflection / coarse estimator). Writes Cases/Results/<case>_mesh_report.json."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      env: []
+      expected_outputs:
+        - "Cases/Results/<case>_mesh_report.json"
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 60
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "packages/starccm-bridge/tests/test_bridge_p0p1p2_fixes.py"
+    verified_at: "2026-06-10T00:00:00+08:00"
+    tags: ["trimmer", "log-parse", "auto-mesh-op", "compile-time-api"]
+    notes: >
+      v18+ switched to compile-time (List<String>, Collection<Part>)
+      overload — v17's 2-arg with List<Region> hits a Neo property
+      coercion bug in 19.02.009. The CLI must rename class to match
+      the file (CliMeshGenRun.java is the same code, different
+      filename). 1251 lines — most of the 9-path cascade.
+    line_count: 1251
+    authored_by: kogami
+
+  - id: cli_mesh_gen_run_v20
+    path: "CliMeshGenRun.java"
+    filename: "CliMeshGenRun.java"
+    case_family: multi
+    phase: mesh
+    intent: "Identical to CliMeshGen.java with a different filename for the CLI's class-name-rename template-substitution pattern. Calls the same 9-path cascade."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      env: []
+      expected_outputs:
+        - "Cases/Results/<case>_mesh_report.json"
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 60
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "packages/starccm-bridge/tests/test_bridge_p0p1p2_fixes.py"
+    verified_at: "2026-06-10T00:00:00+08:00"
+    tags: ["trimmer", "log-parse", "class-rename-target"]
+    notes: >
+      The CLI uses CliMeshGenRun.java when it needs to template-substitute
+      the class name (so multiple mesher variants can be spawned in the
+      same JVM). Don't register both as separate use cases — pick one
+      per case.
+    line_count: 1251
+    authored_by: kogami
+    supersedes_status: false
+
+  - id: cli_mesh
+    path: "CliMesh.java"
+    filename: "CliMesh.java"
+    case_family: multi
+    phase: mesh
+    intent: "List all geometry parts in the sim via SimulationPartManager and PartManager. Returns GeometryPart collection with names + counts."
+    contract:
+      input_kind: existing_sim
+      output_kind: log_only
+      env: []
+      license_required: STARCCM_POST
+      approximate_wall_s: 3
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["read-only", "part-discovery"]
+    notes: >
+      Earlier-gen mesh macro. Use CliMeshGen for actual mesh
+      generation; this is for part-list introspection only.
+    line_count: 99
+    authored_by: kogami
+
+  - id: gen_mesh_v2
+    path: "GenMesh.java"
+    filename: "GenMesh.java"
+    case_family: multi
+    phase: mesh
+    intent: "Generate volume mesh for a sim with existing GeometryParts using direct API calls (no reflection). Pulls parts from GeometryPartManager, creates AutoMeshOperation, runs it."
+    contract:
+      input_kind: existing_sim
+      output_kind: log_only
+      env: []
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 45
+    starccm_version: "19.02.009"
+    status: reference
+    superseded_by: cli_mesh_gen_v20
+    tags: ["auto-mesh-op", "direct-api"]
+    notes: >
+      v2 direct-API version. v20 (CliMeshGen) is the canonical path
+      because of its log-parse cell-count fix.
+    line_count: 151
+    authored_by: kogami
+
+  - id: cli_mesh_quality_v15
+    path: "CliMeshQuality.java"
+    filename: "CliMeshQuality.java"
+    case_family: multi
+    phase: mesh
+    intent: "Create MaxSkewness (SkewnessAngle) + MinQuality (CellQuality) reports on all regions, read via getReportMonitorValue, write Cases/Results/<case>_mesh_quality.json."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      env: []
+      expected_outputs:
+        - "Cases/Results/<case>_mesh_quality.json"
+      license_required: STARCCM_POST
+      approximate_wall_s: 10
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "packages/starccm-bridge/tests/test_bridge_p0p1p2_fixes.py"
+    verified_at: "2026-06-10T00:00:00+08:00"
+    tags: ["skewness", "cell-quality", "report-monitor"]
+    notes: >
+      v15 Phase B. If region/report access fails, emits ok=false JSON
+      (the Python parser is fault-tolerant).
+    line_count: 232
+    authored_by: kogami
+
+  - id: cli_mesh_refine_v15
+    path: "CliMeshRefine.java"
+    filename: "CliMeshRefine.java"
+    case_family: multi
+    phase: mesh
+    intent: "Adaptive mesh refinement loop: accepts target_quality / max_skewness / max_iterations. Loops: check quality → refine (cell size shrink + re-mesh) → re-check. Convergence / max-iters / failure = 3 terminate paths."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      env: []
+      expected_outputs:
+        - "Cases/Results/<case>_mesh_refine.json"
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 600
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["adaptive", "refine-loop"]
+    notes: >
+      Reads target_quality / max_skewness / max_iterations from
+      template placeholders; the CLI must run the template-substitution
+      before spawning.
+    line_count: 243
+    authored_by: kogami
+
+  # ============================================================
+  # UTILITY MACROS — phase: solve
+  # ============================================================
+
+  - id: cli_solve
+    path: "CliSolve.java"
+    filename: "CliSolve.java"
+    case_family: multi
+    phase: solve
+    intent: "Re-enable physics continuum on the CylFlow continuum: SingleComponentGas + SegregatedFlow + Turbulent + Rans + KOmega + SstKw + KwAllYplus + IdealGas + SegregatedFluidTemp + GammaTransition. Then initialize + run to convergence."
+    contract:
+      input_kind: existing_sim
+      output_kind: log_only
+      env: []
+      expected_outputs:
+        - "Cases/Results/cyl_flow_v9m_phys.txt"
+      license_required: STARCCM_POWER
+      approximate_wall_s: 300
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["k-omega-sst", "segregated", "physics-enable"]
+    notes: >
+      Hard-codes the continuum name "CylFlow". The "right" entry point
+      is one of the case-specific full_pipeline macros (LDC / NACA /
+      VortexStreet); use this only if the continuum is already set up
+      and you just need to re-enable physics.
+    line_count: 60
+    authored_by: kogami
+
+  - id: cli_solve_init_only_v18
+    path: "CliSolveInitOnly.java"
+    filename: "CliSolveInitOnly.java"
+    case_family: multi
+    phase: solve
+    intent: "Just initialize solution on an existing meshed sim, write Cases/Results/init_report.json with pre-init state + post-init time. No iteration. v18 P1 uses compile-time sim.getSimulationIterator() (no reflection)."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      env: []
+      expected_outputs:
+        - "Cases/Results/init_report.json"
+      license_required: STARCCM_POWER
+      approximate_wall_s: 30
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "packages/starccm-bridge/tests/test_bridge_p0p1p2_fixes.py"
+    verified_at: "2026-06-10T00:00:00+08:00"
+    tags: ["init-only", "no-iter", "compile-time-api"]
+    notes: >
+      Use before a real run to confirm Solution init succeeds without
+      committing to a long solve. Catches mesh-induced init failures
+      cheaply.
+    line_count: 76
+    authored_by: kogami
+
+  - id: cli_solve_step_v22
+    path: "CliSolveStep.java"
+    filename: "CliSolveStep.java"
+    case_family: multi
+    phase: solve
+    intent: "Solve 50 iters, write Cases/Results/<case>_convergence.json (7xN residual matrix + iter time series). v22 P0 captures real convergence curves — replaces the v19 single-iter sketch."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      env: []
+      expected_outputs:
+        - "Cases/Results/<case>_convergence.json"
+        - "Cases/Results/step_report.json"
+      license_required: STARCCM_POWER
+      approximate_wall_s: 60
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "packages/starccm-bridge/tests/test_bridge_p0p1p2_fixes.py"
+    verified_at: "2026-06-10T00:00:00+08:00"
+    tags: ["convergence-curve", "residual-history", "50-iter"]
+    notes: >
+      Auto-generated by cmd_solve_step; the CLI regenerates this
+      per-call. Don't edit by hand.
+    line_count: 244
+    authored_by: kogami
+
+  - id: run_simulation_v20
+    path: "RunSimulation.java"
+    filename: "RunSimulation.java"
+    case_family: multi
+    phase: solve
+    intent: "Solver-only spawn: sim.getSimulationIterator().run() + write step_report.json. Use this when physics is already configured and you just want to run."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      env: []
+      expected_outputs:
+        - "Cases/Results/step_report.json"
+      license_required: STARCCM_POWER
+      approximate_wall_s: 600
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["iterator-run", "solver-only"]
+    notes: >
+      v20 P1. Pair with CliSolveInitOnly to gate the long run on a
+      successful init.
+    line_count: 74
+    authored_by: kogami
+
+  - id: cli_solver_watch_v15
+    path: "CliSolverWatch.java"
+    filename: "CliSolverWatch.java"
+    case_family: multi
+    phase: solve
+    intent: "Live residual monitor: polls every 2s, streams residuals to stdout + a file, exits when target_residual reached (or max_iters hit), writes residuals.json."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      env: []
+      parameters:
+        poll_interval_s: {type: int, default: 2}
+        target_residual: {type: float, default: 1.0e-4}
+        max_iters: {type: int, default: 100000}
+      expected_outputs:
+        - "Cases/Results/residuals.json"
+      license_required: STARCCM_POWER
+      approximate_wall_s: 1800
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["residual-monitor", "early-exit", "stream"]
+    notes: >
+      v15 Phase C. Pairs with RunSimulation to do early-exit on
+      convergence.
+    line_count: 191
+    authored_by: kogami
+
+  # ============================================================
+  # UTILITY MACROS — phase: postprocess (reports, integrals, scenes)
+  # ============================================================
+
+  - id: cli_post_process_v18
+    path: "CliPostProcess.java"
+    filename: "CliPostProcess.java"
+    case_family: multi
+    phase: postprocess
+    intent: "Unified real post-processing v18 P1: 5 read-only analysis steps (mesh stats, FF stats, BC values, monitor data, geometry stats) + JSON write. Fully reflective with 3-tier monitor value fallback."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      env: []
+      expected_outputs:
+        - "Cases/Results/<case>_postprocess.json"
+      license_required: STARCCM_POST
+      approximate_wall_s: 15
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "packages/starccm-bridge/tests/test_bridge_p0p1p2_fixes.py"
+    verified_at: "2026-06-10T00:00:00+08:00"
+    tags: ["reflective", "monitor-fallback", "5-step"]
+    notes: >
+      v18 P1. The P0 version (v17) was 6 sub-paths; the v18 P1
+      adds the 3-tier monitor value fallback. Read by the chief
+      engineer's post-step report aggregation.
+    line_count: 462
+    authored_by: kogami
+
+  - id: cli_post_process_wrapper
+    path: "CliPostProcessWrapper.java"
+    filename: "CliPostProcessWrapper.java"
+    case_family: multi
+    phase: wrapper
+    intent: "Thin wrapper: sets system properties (out path, drag part, scene field), then reflectively invokes CliPostProcess.execute()."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      env: []
+      expected_outputs:
+        - "Cases/Results/<system_starccm_out>.json"
+      license_required: STARCCM_POST
+      approximate_wall_s: 15
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["wrapper", "system-properties"]
+    notes: >
+      The wrapper pattern: keeps CliPostProcess's actual code stable
+      while letting callers customize the output path + part name.
+    line_count: 25
+    authored_by: kogami
+
+  - id: cli_report_force_v15
+    path: "CliReportForce.java"
+    filename: "CliReportForce.java"
+    case_family: multi
+    phase: postprocess
+    intent: "Force / Moment Report CLI macro v15 Phase F: reads part name + direction + components + output JSON path; writes {Fx, Fy, Fz, Mx, My, Mz}."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      parameters:
+        part: {type: string, description: "Part name (eg. 'Cylinder')"}
+        direction: {type: string, default: "1,0,0"}
+        components: {type: enum, default: "both", values: ["pressure", "viscous", "both"]}
+        out: {type: path, description: "output JSON"}
+      env: []
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 5
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "packages/starccm-bridge/tests/test_bridge_p0p1p2_fixes.py"
+    verified_at: "2026-06-10T00:00:00+08:00"
+    tags: ["force-report", "moment", "boundary-input"]
+    notes: >
+      Args come from getArgs() OR System.getProperty (set by
+      JavaMacroLauncher). v15 Phase F.
+    line_count: 213
+    authored_by: kogami
+
+  - id: cli_report_force_wrapper
+    path: "CliReportForceWrapper.java"
+    filename: "CliReportForceWrapper.java"
+    case_family: multi
+    phase: wrapper
+    intent: "Thin wrapper: sets starccm.part / direction / components / out, reflectively invokes CliReportForce.execute()."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      env: []
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 5
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["wrapper", "system-properties"]
+    notes: >
+      Forces a sensible default (X direction, both components, Cylinder
+      part). Use CliReportForce directly for tunable runs.
+    line_count: 27
+    authored_by: kogami
+
+  - id: cli_report_moment_wrapper
+    path: "CliReportMomentWrapper.java"
+    filename: "CliReportMomentWrapper.java"
+    case_family: multi
+    phase: wrapper
+    intent: "Thin wrapper that calls CliReportForce with direction (1,0,0) to extract a moment; same JSON shape as force."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      env: []
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 5
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["wrapper", "moment"]
+    line_count: 27
+    authored_by: kogami
+
+  - id: cli_report_integral_v15
+    path: "CliReportIntegral.java"
+    filename: "CliReportIntegral.java"
+    case_family: multi
+    phase: postprocess
+    intent: "Surface / Volume Integral Report v15 Phase F: reads part + field function + operation (total/avg/min/max) + kind (surface/volume); writes the integral JSON."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      parameters:
+        part: {type: string}
+        field: {type: string, description: "FieldFunction name (eg. 'Pressure', 'Velocity', 'Temperature')"}
+        operation: {type: enum, values: ["total", "average", "min", "max"]}
+        kind: {type: enum, values: ["surface", "volume"]}
+        out: {type: path}
+      env: []
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 5
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "packages/starccm-bridge/tests/test_bridge_p0p1p2_fixes.py"
+    verified_at: "2026-06-10T00:00:00+08:00"
+    tags: ["surface-integral", "volume-integral", "field-function"]
+    line_count: 231
+    authored_by: kogami
+
+  - id: cli_report_integral_surface_wrapper
+    path: "CliReportIntegralSurfaceWrapper.java"
+    filename: "CliReportIntegralSurfaceWrapper.java"
+    case_family: multi
+    phase: wrapper
+    intent: "Surface-integral wrapper around CliReportIntegral. Forces kind=surface, operation=total, field=Pressure."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      env: []
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 5
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["wrapper", "surface-integral", "pressure"]
+    line_count: 26
+    authored_by: kogami
+
+  - id: cli_report_integral_volume_wrapper
+    path: "CliReportIntegralVolumeWrapper.java"
+    filename: "CliReportIntegralVolumeWrapper.java"
+    case_family: multi
+    phase: wrapper
+    intent: "Volume-integral wrapper around CliReportIntegral. Forces kind=volume, operation=total, field=Velocity."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      env: []
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 5
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["wrapper", "volume-integral", "velocity"]
+    line_count: 26
+    authored_by: kogami
+
+  - id: cli_compare_cases_v17
+    path: "CliCompareCases.java"
+    filename: "CliCompareCases.java"
+    case_family: multi
+    phase: postprocess
+    intent: "Multi-case real monitor/report aggregation across N .sim files. STAR-CCM+ can only have ONE active sim per JVM, so the Python driver spawns a fresh STAR-CCM+ per .sim and aggregates the JSON snapshots."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      env:
+        - "starccm.compare.sim"
+        - "starccm.compare.out"
+        - "starccm.compare.label"
+        - "starccm.compare.part"
+      expected_outputs:
+        - "<starccm.compare.out>.case_snapshot.json"
+      license_required: STARCCM_POST
+      approximate_wall_s: 30
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["multi-sim", "per-sim-spawn", "aggregation"]
+    notes: >
+      v17 Phase D. Pairs with the CLI's compare-cases subcommand. Per-sim
+      JSON shape: {type: case_snapshot, case_label, sim_path, ok, monitors,
+      reports}.
+    line_count: 254
+    authored_by: kogami
+
+  # ============================================================
+  # UTILITY MACROS — phase: export (PNG / STL / VTK / mesh)
+  # ============================================================
+
+  - id: cli_export_scene_v55
+    path: "CliExportScene.java"
+    filename: "CliExportScene.java"
+    case_family: multi
+    phase: export
+    intent: "Render a Scene to PNG with explicit field function + manual range. v55g: detect Sentinel FF (presentation name wrapped in <>) and fall back to first real FF. v55: rebuild scene fresh in batch mode (lazy-FF binding)."
+    contract:
+      input_kind: existing_sim
+      output_kind: png_scene
+      parameters:
+        field: {type: string, default: "", description: "FF name; empty = first existing scene"}
+        auto_range: {type: bool, default: true}
+        lut: {type: string, default: "blue-red"}
+      env: []
+      expected_outputs:
+        - "Cases/Results/<case>_scene.png"
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 30
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "packages/starccm-bridge/tests/test_bridge_p0p1p2_fixes.py"
+    verified_at: "2026-06-10T00:00:00+08:00"
+    tags: ["scene-render", "lut", "auto-range"]
+    notes: >
+      The canonical scene-export. v55g wraps field-function lookup in
+      the _isRealFF() check to skip <Select Function> sentinels.
+    line_count: 236
+    authored_by: kogami
+
+  - id: cli_export_field_data_v24
+    path: "CliExportFieldData.java"
+    filename: "CliExportFieldData.java"
+    case_family: multi
+    phase: export
+    intent: "TRUE scalar field function CSV export v24 P0. 4 report paths (Sum/Min/Max/Avg) + 11 reflective sub-paths (5a-5k) cascading through getValue(coord), getValueInternal, FF.eval, 1-cell SumReport, mesh-node coords, getCellCenters, getMaxCoordinate, cells.getCell(0).getCoordinate."
+    contract:
+      input_kind: existing_sim
+      output_kind: csv
+      env: []
+      expected_outputs:
+        - "Cases/Results/<case>_field_<field>.csv"
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 60
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "packages/starccm-bridge/tests/test_bridge_p0p1p2_fixes.py"
+    verified_at: "2026-06-10T00:00:00+08:00"
+    tags: ["scalar-ff", "csv-export", "11-paths-cascade", "reflective"]
+    notes: >
+      v24 P0. The 5g-5k sub-paths were added because STAR-CCM+
+      19.02.009's PrimitiveFieldFunction has no getValue(Coordinate)
+      method (DEC-005). The first path that returns non-zero samples
+      wins; chosen method is reported in samples_method.
+    line_count: 1865
+    authored_by: kogami
+
+  - id: cli_export_mesh_v17
+    path: "CliExportMesh.java"
+    filename: "CliExportMesh.java"
+    case_family: multi
+    phase: export
+    intent: "TRUE volume mesh export v17 (.ccm native + STL fallback + scene-mesh PNG sidecar). Tries MeshPart.exportCae() for native .ccm, then reflective StlIo.exportSTL, then mesh scene PNG as degradation."
+    contract:
+      input_kind: existing_sim
+      output_kind: multiple
+      env: []
+      expected_outputs:
+        - "Cases/Results/<case>_mesh_export.json"
+        - "<sim>.ccm (native)"
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 45
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["mesh-export", "ccm-native", "stl-fallback"]
+    notes: >
+      STEP/IGES not supported by STAR-CCM+ Java API; degrades to
+      a .meta.json sidecar.
+    line_count: 343
+    authored_by: kogami
+
+  - id: cli_export_geom_v15
+    path: "CliExportGeom.java"
+    filename: "CliExportGeom.java"
+    case_family: multi
+    phase: export
+    intent: "Geometry part export v15: STL/STEP/IGES. STEP/IGES not in the public Java API — degrades to a .meta.json sidecar describing the part + bounding box for downstream conversion."
+    contract:
+      input_kind: existing_sim
+      output_kind: multiple
+      env: []
+      expected_outputs:
+        - "Cases/Results/<part>.ccm"
+        - "Cases/Results/<part>.<fmt>.meta.json"
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 30
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["geometry-export", "step-degrades", "iges-degrades"]
+    line_count: 194
+    authored_by: kogami
+
+  - id: cli_export_vtk_v15
+    path: "CliExportVTK.java"
+    filename: "CliExportVTK.java"
+    case_family: multi
+    phase: export
+    intent: "Multi-format scene export dispatcher v15. STAR-CCM+ has no native writeAsVtk/Cgns/EnSight — degrades to raster under the requested filename + .vtk.meta.json sidecar. User re-exports through ParaView/translator."
+    contract:
+      input_kind: existing_sim
+      output_kind: multiple
+      parameters:
+        scene_name: {type: string, default: ""}
+        format_hint: {type: enum, values: ["vtk", "cgns", "ensight"]}
+      env: []
+      expected_outputs:
+        - "Cases/Results/<scene>.<format_hint>"
+        - "Cases/Results/<scene>.<format_hint>.meta.json"
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 30
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["vtk-degrades", "cgns-degrades", "ensight-degrades"]
+    notes: >
+      Documented DEGRADATION PATH: STAR-CCM+ Scene has no
+      vector-field writer. Raster bytes under a .vtk filename
+      are invalid; the meta JSON signals the format to downstream.
+    line_count: 162
+    authored_by: kogami
+
+  # ============================================================
+  # UTILITY MACROS — phase: checkpoint (save / restart)
+  # ============================================================
+
+  - id: cli_checkpoint_v15
+    path: "CliCheckpoint.java"
+    filename: "CliCheckpoint.java"
+    case_family: multi
+    phase: checkpoint
+    intent: "Checkpoint save: sim.saveState(out_path) + write meta JSON (timestamp, current iter, residuals). Usage: starccm+.bat -batch CliCheckpoint.java <sim> <out_sim> <out_meta>."
+    contract:
+      input_kind: existing_sim
+      output_kind: multiple
+      parameters:
+        sim: {type: path}
+        out_sim: {type: path}
+        out_meta: {type: path}
+      env: []
+      expected_outputs:
+        - "<out_sim>.sim"
+        - "<out_meta>.json"
+      license_required: STARCCM_POWER
+      approximate_wall_s: 60
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["checkpoint", "save-state", "iter-resume"]
+    line_count: 109
+    authored_by: kogami
+
+  - id: cli_restart_v15
+    path: "CliRestart.java"
+    filename: "CliRestart.java"
+    case_family: multi
+    phase: checkpoint
+    intent: "Resume from a checkpoint: read meta JSON, pick up at saved iter, run N extra iters, save new .sim + new meta."
+    contract:
+      input_kind: existing_sim
+      output_kind: multiple
+      parameters:
+        in_sim: {type: path}
+        in_meta: {type: path}
+        out_sim: {type: path}
+        extra_iters: {type: int, default: 100}
+        out_meta: {type: path, default: ""}
+      env: []
+      expected_outputs:
+        - "<out_sim>.sim"
+        - "<out_meta>.json"
+      license_required: STARCCM_POWER
+      approximate_wall_s: 600
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["restart", "iter-resume", "checkpoint-pair"]
+    line_count: 116
+    authored_by: kogami
+
+  # ============================================================
+  # UTILITY MACROS — phase: setup (BC, physics, geom)
+  # ============================================================
+
+  - id: cli_bc
+    path: "CliBC.java"
+    filename: "CliBC.java"
+    case_family: multi
+    phase: setup
+    intent: "Find the first Boundary named 'Default' across all regions and print its region/boundary names. Diagnostic for which Default boundary to bind BCs to."
+    contract:
+      input_kind: existing_sim
+      output_kind: log_only
+      env: []
+      license_required: STARCCM_POST
+      approximate_wall_s: 2
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["boundary-discovery", "default-bc"]
+    line_count: 86
+    authored_by: kogami
+
+  - id: cli_phys
+    path: "CliPhys.java"
+    filename: "CliPhys.java"
+    case_family: multi
+    phase: setup
+    intent: "List all PhysicsContinua + their enabled models, write Cases/Results/cyl_flow_v9m_phys.txt. Use to verify physics is configured as expected before a long run."
+    contract:
+      input_kind: existing_sim
+      output_kind: log_only
+      expected_outputs:
+        - "Cases/Results/cyl_flow_v9m_phys.txt"
+      env: []
+      license_required: STARCCM_POST
+      approximate_wall_s: 3
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["physics-dump", "continuum-list"]
+    line_count: 63
+    authored_by: kogami
+
+  # ============================================================
+  # CASE-TEMPLATE MACROS (NEW cases per DEC-006 follow-up 3)
+  # ============================================================
+
+  - id: cli_airfoil_v15
+    path: "CliAirfoil.java"
+    filename: "CliAirfoil.java"
+    case_family: naca0012_airfoil
+    phase: full_pipeline
+    intent: "NACA 0012 airfoil 2D external aerodynamics template v15.0: SingleComponentGas + SegregatedFlow + SST K-Omega. AoA applied via velocity vector; Re target → far-field velocity magnitude. Init + run N iter + save sim + summary."
+    contract:
+      input_kind: none
+      output_kind: modified_sim
+      parameters:
+        re_number: {type: float, default: 6.0e6}
+        aoa_deg: {type: float, default: 5.0}
+        iterations: {type: int, default: 200}
+      env: []
+      license_required: STARCCM_POWER
+      approximate_wall_s: 30
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["k-omega-sst", "segregated", "naca-0012-template"]
+    notes: >
+      Template-style macro; not wired into case_profiles yet.
+      Use NacaTrueE2E.java for the real-geometry path.
+    line_count: 284
+    authored_by: kogami
+
+  - id: cli_pipe_flow_v15
+    path: "CliPipeFlow.java"
+    filename: "CliPipeFlow.java"
+    case_family: duct_flow
+    phase: full_pipeline
+    intent: "Circular pipe Poiseuille flow template v15.0: pressure-driven inlet/outlet (Δp = 32 μ U L / D²). Re<2300 → Laminar; Re≥2300 → SST K-Omega. L/D scales domain length."
+    contract:
+      input_kind: none
+      output_kind: modified_sim
+      parameters:
+        re_number: {type: float, default: 1000.0}
+        length_to_diameter: {type: float, default: 10.0}
+        iterations: {type: int, default: 1000}
+      env: []
+      license_required: STARCCM_POWER
+      approximate_wall_s: 60
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["poiseuille", "pressure-driven", "template"]
+    line_count: 282
+    authored_by: kogami
+
+  - id: cli_car_aero_v15
+    path: "CliCarAero.java"
+    filename: "CliCarAero.java"
+    case_family: car_aero
+    phase: full_pipeline
+    intent: "Simplified car aerodynamics template v15.0 (Ahmed-body-like bluff body, L=4m). Re=ρ U L / μ → U_inf at inlet. SST K-Omega. AoA via yawed inflow. Run N iters, save sim + drag/lift report + scene."
+    contract:
+      input_kind: none
+      output_kind: multiple
+      parameters:
+        re_number: {type: float, default: 5.0e6}
+        aoa_deg: {type: float, default: 0.0}
+        iterations: {type: int, default: 500}
+      env: []
+      license_required: STARCCM_POWER
+      approximate_wall_s: 120
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["ahmed-body", "k-omega-sst", "external", "template"]
+    line_count: 293
+    authored_by: kogami
+
+  - id: cli_building_v15
+    path: "CliBuilding.java"
+    filename: "CliBuilding.java"
+    case_family: building_aero
+    phase: full_pipeline
+    intent: "Cube / building bluff-body 3D external flow template v15.0. H=10m assumed. Re=ρ U H / μ → U_inf at inlet. SST K-Omega. Inlet velocity-inlet, outlet pressure-outlet, sides symmetry (best-effort). Run + save sim + scene."
+    contract:
+      input_kind: none
+      output_kind: multiple
+      parameters:
+        re_number: {type: float, default: 1.0e4}
+        iterations: {type: int, default: 300}
+      env: []
+      license_required: STARCCM_POWER
+      approximate_wall_s: 60
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["cube", "k-omega-sst", "external", "template"]
+    line_count: 264
+    authored_by: kogami
+
+  # ============================================================
+  # DOMAIN MACROS — APU (user's external project, NOT in whitelist)
+  # ============================================================
+
+  - id: apu_complete_workflow_v2
+    path: "APU_Complete_Workflow.java"
+    filename: "APU_Complete_Workflow.java"
+    case_family: apu_complete
+    phase: full_pipeline
+    intent: "APU Complete CFD Workflow v2.0: auto-import APU_smart_final.stl → surface prep → generate mesh → set physics models → run simulation. Hard-codes paths to D:/StarCCM Codebuddy/APU/."
+    contract:
+      input_kind: stl
+      output_kind: modified_sim
+      env: []
+      expected_outputs:
+        - "D:/StarCCM Codebuddy/Cases/APU_Complete_Simulation.sim"
+      license_required: STARCCM_POWER
+      approximate_wall_s: 1800
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["apu", "28-parts", "auto-mesh", "external-project"]
+    notes: >
+      User's external APU project (not part of harness whitelist.yaml).
+      Keep entry for catalog completeness; the harness never invokes it
+      because case_profiles.yaml doesn't list apu_complete.
+    line_count: 472
+    authored_by: workbuddy-ai
+
+  - id: apu_conjugate_ht
+    path: "APU_Conjugate_HT.java"
+    filename: "APU_Conjugate_HT.java"
+    case_family: apu_complete
+    phase: full_pipeline
+    intent: "APU Conjugate Heat Transfer (Solid + Fluid coupling). Fluid domain 100m, base mesh 1m, 4 prism layers. External inlet 100 m/s + internal mass-flow 0.5 kg/s + outlet 1 atm. Aluminum thermal cond 237 W/m-K."
+    contract:
+      input_kind: none
+      output_kind: log_only
+      env: []
+      license_required: STARCCM_POWER
+      approximate_wall_s: 1800
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["apu", "cht", "boussinesq", "journal-macro"]
+    notes: >
+      STAR-CCM+ Journal-style macro (uses global.setGlobalParameter,
+      println, no Java class wrapper). May need conversion to
+      extends StarMacro to spawn from the bridge.
+    line_count: 189
+    authored_by: workbuddy-ai
+
+  - id: apu_external_flow
+    path: "APU_External_Flow.java"
+    filename: "APU_External_Flow.java"
+    case_family: apu_complete
+    phase: full_pipeline
+    intent: "APU External Aerodynamics & Heat Convection. Fluid domain 100m, base mesh 1m. Inlet 100 m/s, outlet 0 Pa gauge."
+    contract:
+      input_kind: none
+      output_kind: log_only
+      env: []
+      license_required: STARCCM_POWER
+      approximate_wall_s: 1800
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["apu", "external", "journal-macro"]
+    notes: >
+      Journal-style (no Java class wrapper).
+    line_count: 144
+    authored_by: workbuddy-ai
+
+  - id: apu_internal_flow
+    path: "APU_Internal_Flow.java"
+    filename: "APU_Internal_Flow.java"
+    case_family: apu_complete
+    phase: full_pipeline
+    intent: "APU Internal Flow: Intake → Compressor → Combustion → Turbine → Exhaust. Mass flow 0.5 kg/s, outlet 1 atm, 10 max iters (wrapper), 4 prism layers."
+    contract:
+      input_kind: none
+      output_kind: log_only
+      env: []
+      license_required: STARCCM_POWER
+      approximate_wall_s: 600
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["apu", "internal", "journal-macro"]
+    line_count: 132
+    authored_by: workbuddy-ai
+
+  - id: car_cfd_full_pipeline
+    path: "CarCFD_FullPipeline.java"
+    filename: "CarCFD_FullPipeline.java"
+    case_family: car_aero
+    phase: full_pipeline
+    intent: "14-part car + wind tunnel full CFD pipeline: import 14 STLs → build WindTunnel region with parts as boundaries → auto mesh (surface repair + resurfacer + dual + prism) → Gas + Coupled Flow + SST K-Omega + Energy → front=inlet, back=outlet, sides/ground=topo, parts=wall → 500 steady iters → Force/Cd/Cl reports + scene + PNG + save sim."
+    contract:
+      input_kind: stl
+      output_kind: multiple
+      env: []
+      expected_outputs:
+        - "D:/StarCCM Codebuddy/Cases/CarWindTunnel/car_windtunnel.sim"
+        - "D:/StarCCM Codebuddy/Cases/CarWindTunnel/car_windtunnel_scene.png"
+      license_required: STARCCM_POWER
+      approximate_wall_s: 1800
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["car", "14-parts", "coupled-flow", "ascii-only"]
+    notes: >
+      Pure-ASCII only (STAR-CCM+ javac is GBK). Hard-codes the
+      14-part car list.
+    line_count: 425
+    authored_by: kogami
+
+  - id: car_wind_tunnel_v35
+    path: "CarWindTunnel.java"
+    filename: "CarWindTunnel.java"
+    case_family: car_aero
+    phase: full_pipeline
+    intent: "Multi-part car + wind tunnel CFD v35 with displays + Gas physics + scene. Hard-codes 13 car parts (body, cabin, underbody, spoilers, 4 wheels, 2 mirrors, 2 headlights) + 1 windtunnel."
+    contract:
+      input_kind: stl
+      output_kind: multiple
+      env: []
+      expected_outputs:
+        - "D:/StarCCM Codebuddy/Cases/CarWindTunnel/car_windtunnel.sim"
+        - "D:/StarCCM Codebuddy/Cases/CarWindTunnel/car_windtunnel_scene.png"
+      license_required: STARCCM_POWER
+      approximate_wall_s: 1800
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["car", "13-parts", "displays", "ascii-only"]
+    line_count: 232
+    authored_by: kogami
+
+  # ============================================================
+  # SHIP & IT — full pipeline + report, the user's proven pattern
+  # ============================================================
+
+  - id: vortex_street_v8_build_v3
+    path: "V161R_BuildV3_Forces.java"
+    filename: "V161R_BuildV3_Forces.java"
+    case_family: circular_cylinder_wake
+    phase: full_pipeline
+    intent: "V2 + ForceCoefficientReport on the cylinder wall. Uses sim.get(ReportManager.class).createReport(ForceCoefficientReport.class); report.setPartsInput(...) + setReferenceAreaInput(...) etc. v3 fixed region/wall selection for ForceCoefficient on the inner cylinder boundary."
+    contract:
+      input_kind: existing_sim
+      output_kind: modified_sim
+      env: []
+      license_required: STARCCM_POWER
+      approximate_wall_s: 600
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["force-coefficient", "report-manager", "v161r-lineage"]
+    notes: >
+      V161R line (v1 through v42) is the user's iterative exploration
+      of cylinder-wake V&V. The canonical "ship" version is
+      V161R_V14_ForcesCorrect.java (separate entry). Use the V14
+      entry as the active one; this V3 is kept for chain of custody.
+    line_count: 449
+    authored_by: kogami
+
+  - id: vortex_street_v3_post_process
+    path: "V161R_PostProcessV5.java"
+    filename: "V161R_PostProcessV5.java"
+    case_family: circular_cylinder_wake
+    phase: postprocess
+    intent: "V5: complete post-processing of v161R_full.sim. Key fixes from V3: report init (call update/evaluate after create), use createScalarSceneAndWait (auto-creates displayer, correct API), try scene.createSection with HeadlessException catch, comprehensive JSON output."
+    contract:
+      input_kind: existing_sim
+      output_kind: multiple
+      env: []
+      expected_outputs:
+        - "Cases/Results/v5_postprocess.json"
+      license_required: STARCCM_DESIGN
+      approximate_wall_s: 60
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["postprocess", "scene", "report-eval"]
+    notes: >
+      V161R post-process lineage (V2/V3/V5). V5 is the latest. Kept
+      for archaeology; use CliPostProcess.java for the canonical
+      v18 P1 path.
+    line_count: 365
+    authored_by: kogami
+
+  - id: full_probe_v12
+    path: "FullProbe.java"
+    filename: "FullProbe.java"
+    case_family: multi
+    phase: probe
+    intent: "Comprehensive API probe v12: dumps ALL API surface (managers, methods, fields) in RESULT | CATEGORY | FEATURE | METHOD | DETAIL format. Use when a new macro needs to find the right STAR-CCM+ 2402 method name."
+    contract:
+      input_kind: none
+      output_kind: log_only
+      expected_outputs:
+        - "D:/StarCCM Codebuddy/Cases/Results/v12_fullprobe_log.txt"
+      env: []
+      license_required: STARCCM_POST
+      approximate_wall_s: 30
+    starccm_version: "19.02.009"
+    status: reference
+    tags: ["comprehensive", "api-discovery", "reflective"]
+    line_count: 444
+    authored_by: kogami
+
+  - id: cli_test_smoke_v34
+    path: "CliTestSmoke.java"
+    filename: "CliTestSmoke.java"
+    case_family: multi
+    phase: probe
+    intent: "Minimal STAR-CCM+ smoke test macro v34. Verifies STAR-CCM+ can be spawned, compile this .java, run, and emit DONE. Uses zero CJK + minimal imports."
+    contract:
+      input_kind: existing_sim
+      output_kind: summary_json
+      env: []
+      expected_outputs:
+        - "Cases/Results/smoke_test.sim"
+        - "Cases/Results/smoke_summary.json"
+      license_required: STARCCM_POST
+      approximate_wall_s: 5
+    starccm_version: "19.02.009"
+    status: proven
+    verified_by: "packages/starccm-bridge/tests/test_bridge_p0p1p2_fixes.py"
+    verified_at: "2026-06-10T00:00:00+08:00"
+    tags: ["smoke", "pre-flight", "ascii-only"]
+    notes: >
+      The first thing to spawn when in doubt. If CliTestSmoke fails,
+      the STAR-CCM+ install itself is broken.
+    line_count: 86
+    authored_by: kogami
+
+# ============================================================
+# UNREGISTERED MACROS — known but not curated into entries yet
+# ============================================================
+# These lists tell the verifier "yes, we know about these files, but
+# we haven't promoted them to full entries yet." The next sweep
+# (docs-knowledge-engineer) should fold the valuable ones into the
+# main `macros:` list.
+#
+# skipped_need_metadata:
+#   The macro looks production-ready but we haven't read its first-30
+#   comment block yet. Promotion is a 5-min task.
+#
+#   - RealCFD.java                  # RealCFD_Final.java is the ship-it's
+#                                   #   successor (separate entry)
+#   - RealCFD_Final.java            # v27 final physics-stack prototype
+#   - APU_Complete_Template.java    # External APU template
+#   - APU_Step1_Import_All.java     # 28-STL import for APU
+#   - APU_Step1_Import_28.java      # Same, 28-part variant
+#   - APU_Step1_Import_28_Parts_v3.java
+#   - APU_Step1_Import_28_Parts_v4.java
+#   - APU_Step1_OneFile.java
+#   - APU_Step2_Wrapper.java        # Surface wrapper
+#   - APU_Step2_Surface_Wrapper.java
+#   - APU_Step3_Volume_Mesh.java    # Volume mesh
+#   - APU_Import_All.java
+#   - APU_Find_Parts.java
+#   - APU_Diag_ServerMode.java
+#   - APU_Diag_v2.java
+#   - APU_Diag_v3.java
+#   - APU_Simple_Test.java
+#   - APU_Test.java
+#   - APU_Test_Echo.java
+#   - APU_Test_One_Part.java
+#   - APU_Test_Print.java
+#   - APU_Record_Wrapper.java
+#   - CarCFD_FullPipeline.java       # (already in main list as car_cfd_full_pipeline)
+#   - CarWindTunnel.java             # (already in main list as car_wind_tunnel_v35)
+#   - CylinderFlow.java              # v5; CylinderFlow_v6..v9o are scratch
+#   - CylinderFlow_v6.java
+#   - CylinderFlow_v7.java
+#   - CylinderFlow_v8.java
+#   - CylinderFlow_v9.java          # the v9 line has 14 variants (a-o) — most
+#                                    #   are scratch; the user dropped
+#                                    #   CylinderFlow entirely in favor of
+#                                    #   VortexStreet
+#   - CylinderFlow_v9b.java
+#   - CylinderFlow_v9c.java
+#   - CylinderFlow_v9d.java
+#   - CylinderFlow_v9e.java
+#   - CylinderFlow_v9f.java
+#   - CylinderFlow_v9g.java
+#   - CylinderFlow_v9h.java
+#   - CylinderFlow_v9i.java
+#   - CylinderFlow_v9j.java
+#   - CylinderFlow_v9k.java
+#   - CylinderFlow_v9l.java
+#   - CylinderFlow_v9m.java
+#   - CylinderFlow_v9n.java
+#   - CylinderFlow_v9o.java
+#   - CylinderFlow_v9m.java
+#   - PostProcess.java               # APU-specific post-process (the
+#                                    #   CliPostProcess.java is the canonical
+#                                    #   v18 path)
+#   - VisualPostProcess.java         # v40 scene-viz prototype; superseded
+#                                    #   by CliExportScene
+#   - SceneExportFull.java           # v31 scene-export probe
+#   - CompleteWorkflowMacro.java     # Generic 5-step example, not wired
+#   - VortexProbe.java
+#   - VizStrideV43.java
+#   - StreamVectorViz.java
+#   - StreamVectorVizV2.java
+#   - v44_CustomPressure.java
+#   - v45_PressureOnSolved.java
+#   - v46_PressureWithSubtract.java
+#   - v48_PressureManualRange.java
+#   - v49_PressureWithDisplayers.java
+#   - v50_PressureCorrectFF.java
+#   - v52_PressureAutoRangeFromRender.java
+#   - HelloStar.java
+#   - TestHello.java
+#   - ListParts.java
+#   - All V161R_V4..V42 lineage variants (14+ files) # scratch; V14
+#                                    #   is the ship version
+#   - All V161R_V*.java in _archive/ (100+ files)  # archaeology only
+#   - All PatchV* files in _archive/                # patch attempts
+#   - All Probe* / Diag* files in _archive/         # diagnostic scratch
+#
+# skipped_intentionally:
+#   - All files in D:\StarCCM Codebuddy\macros\bin\ and out\
+#       (compiled .class artifacts, not source)
+#   - All files in D:\StarCCM Codebuddy\macros\_archive\
+#       (declared superseded; available for archaeology but not
+#       promoted to entries. The schema §3.2 supersedes / superseded_by
+#       fields exist exactly for this kind of chain-of-custody trail.)
+#   - All 9 files in D:\CFD-harness-Windows-StarCCM\macros\_probes\
+#       (DEC-005 era diagnostic scratch; the chief engineer confirmed
+#       they're not for harness use)
+#
+# summary_stats:
+#   total_in_codebuddy_root: 336   # 284 root + 52 in _archive (2026-06-11)
+#   in_main_registry: 53          # this v1 cut
+#   skipped_need_metadata: 66     # itemized, next sweep target
+#   skipped_intentionally: 52+    # _archive (52), bin (14 .class), out (6 .class),
+#                                 # harness _probes (9). 52+ accounted; 217 root
+#                                 # macros remain un-itemized (mix of probe/diag/scratch
+#                                 # that the next sweep should fold into skip lists).

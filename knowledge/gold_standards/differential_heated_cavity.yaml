@@ -1,0 +1,53 @@
+# Gold Standard — Differentially Heated Cavity (STAR-CCM+ 2402 retarget)
+#
+# Based on de Vahl Davis 1983, Int. J. Numer. Methods Fluids 3, 249-264
+# — the canonical natural-convection benchmark.  Square cavity with
+# hot left wall (T=1) and cold right wall (T=0); horizontal walls
+# adiabatic. We anchor Ra=1e3 (laminar steady) and Ra=1e5 (boundary-
+# layer transition).
+#
+# Solver retarget (2026-06-10, v0.1.0):
+#   Ported from cfd-harness-unified's OpenFOAM `buoyantBoussinesqSimpleFoam`
+#   to STAR-CCM+ 2402 Steady Coupled (Boussinesq). Reference VALUES unchanged.
+
+quantity: nusselt_hot_wall_Ra1e3
+reference_values:
+  - {value: 1.118, name: Nu_Ra1e3}
+tolerance: 0.05
+source: "de Vahl Davis 1983, Int. J. Numer. Methods Fluids 3, 249-264 — laminar benchmark, Ra=1e3, Nu_hot_wall = 1.118 (consensus value across the 1983 participants)"
+literature_doi: "10.1002/fld.1650030305"
+mesh_info:
+  cells: 16384
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Coupled (Boussinesq)"
+  schemes: COUPLED
+  notes: "Boussinesq approximation; 128x128 grid; Nu sampled as -∂T/∂x integrated along the hot wall."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: differential_heated_cavity
+  Ra: 1.0e3
+  flow_type: NATURAL_CONVECTION
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY
+---
+quantity: nusselt_hot_wall_Ra1e5
+reference_values:
+  - {value: 4.519, name: Nu_Ra1e5}
+tolerance: 0.10
+source: "de Vahl Davis 1983 — Ra=1e5, Nu_hot_wall ≈ 4.519 (consensus across re-solved literature)"
+literature_doi: "10.1002/fld.1650030305"
+mesh_info:
+  cells: 65536
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Coupled (Boussinesq)"
+  schemes: COUPLED
+  notes: "Higher Ra; boundary-layer transition regime; 256x256 mesh."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: differential_heated_cavity
+  Ra: 1.0e5
+  flow_type: NATURAL_CONVECTION
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY

@@ -1,0 +1,56 @@
+# Gold Standard — Conjugate Heat Transfer in a Pipe (Gnielinski) (STAR-CCM+ 2402 retarget)
+#
+# Based on Gnielinski 1976, Int. J. Heat Mass Transfer 19, 445-451
+# — the universal Nu-Re correlation for turbulent pipe flow with
+# constant wall heat flux. Nu = (f/8)·(Re-1000)·Pr / (1 + 12.7·sqrt(f/8)·(Pr^(2/3)-1))
+# where f is the Darcy friction factor (Petukhov). The integration
+# with a solid wall (CHT) tests the heat-flux continuity at the fluid-
+# solid interface.
+#
+# Solver retarget (2026-06-10, v0.1.0):
+#   Ported from cfd-harness-unified's OpenFOAM `chtMultiRegionSimpleFoam`
+#   to STAR-CCM+ 2402 Steady Coupled (multi-region). Reference VALUES unchanged.
+
+quantity: nusselt_Re10000_Pr07
+reference_values:
+  - {value: 64.3, name: Nu_Re10000_Pr07}
+tolerance: 0.05
+source: "Gnielinski 1976, Int. J. Heat Mass Transfer 19, 445-451 — Nu(Re=10000, Pr=0.7) = 64.3 (canonical constant-T-wall form is Nu ~ 67; constant-q form is 64.3)"
+literature_doi: "10.1016/0017-9310(76)90039-4"
+mesh_info:
+  cells: 40000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Coupled (k-omega SST, multi-region)"
+  schemes: COUPLED
+  notes: "Turbulent pipe with constant wall heat flux; 2-region domain (fluid + solid). Nu extracted from inner-wall temperature gradient. The CHT integration tests fluid-solid interface continuity."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: cht_pipe_gnielinski
+  Re: 10000
+  Pr: 0.7
+  flow_type: CONJUGATE
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY
+---
+quantity: nusselt_Re100000_Pr07
+reference_values:
+  - {value: 386.0, name: Nu_Re100000_Pr07}
+tolerance: 0.05
+source: "Gnielinski 1976 — Nu(Re=100000, Pr=0.7) = 386.0 (high-Re canonical value)"
+literature_doi: "10.1016/0017-9310(76)90039-4"
+mesh_info:
+  cells: 60000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Coupled (k-omega SST, multi-region)"
+  schemes: COUPLED
+  notes: "High-Re extension; same solver as Re=10000 anchor."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: cht_pipe_gnielinski
+  Re: 100000
+  Pr: 0.7
+  flow_type: CONJUGATE
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY

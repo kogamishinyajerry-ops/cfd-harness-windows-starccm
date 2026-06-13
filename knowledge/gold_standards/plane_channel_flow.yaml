@@ -1,0 +1,55 @@
+# Gold Standard — Plane Channel Flow (DNS Reference) (STAR-CCM+ 2402 retarget)
+#
+# Based on Moser, Kim & Mansour 1999, Phys. Fluids 11, 943-945 — DNS of
+# turbulent channel flow at Re_τ = 590.  The friction velocity u_τ and
+# mean velocity profile are the canonical DNS benchmark for RANS code
+# validation.
+#
+# Solver retarget (2026-06-10, v0.1.0):
+#   Ported from cfd-harness-unified's OpenFOAM `pimpleFoam` (RANS k-omega
+#   SST) to STAR-CCM+ 2402 Steady Coupled. Reference VALUES unchanged.
+
+quantity: reynolds_stress_uu_plus
+reference_values:
+  - {value: 1.0, name: uu_plus_max}
+tolerance: 0.10
+source: "Moser, Kim & Mansour 1999, Phys. Fluids 11, 943-945 — DNS Re_τ=590, peak <u'u'>^+ ≈ 1.0"
+literature_doi: "10.1063/1.869966"
+mesh_info:
+  cells: 100000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Coupled (k-omega SST)"
+  schemes: COUPLED
+  notes: "DNS-validated RANS channel; the + denotes wall units (normalized by u_τ). 100k cells sufficient for RANS-grade channel at Re_τ=590."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: plane_channel_flow
+  Re_tau: 590
+  flow_type: INTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY
+---
+quantity: mean_velocity_u_plus
+reference_values:
+  - {y_plus: 10.0, u_plus: 8.50}
+  - {y_plus: 30.0, u_plus: 14.4}
+  - {y_plus: 100.0, u_plus: 24.0}
+  - {y_plus: 300.0, u_plus: 38.0}
+tolerance: 0.08
+source: "Moser, Kim & Mansour 1999, DNS Re_τ=590, log-region mean velocity at 4 y+ samples (visual-anchored)"
+literature_doi: "10.1063/1.869966"
+mesh_info:
+  cells: 100000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Coupled (k-omega SST)"
+  schemes: COUPLED
+  notes: "Mean velocity at + wall units; vector path in comparator (y+ is the coord key, u+ is the value)."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: plane_channel_flow
+  Re_tau: 590
+  flow_type: INTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY

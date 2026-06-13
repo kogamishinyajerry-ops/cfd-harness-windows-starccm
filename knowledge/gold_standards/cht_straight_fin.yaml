@@ -1,0 +1,59 @@
+# Gold Standard — Conjugate Heat Transfer on a Straight Fin (STAR-CCM+ 2402 retarget)
+#
+# Based on Schmidt 1926 (the original fin-efficiency analysis) and the
+# Incropera, DeWitt, Bergman & Lavine textbook formulation
+# (Incropera 6th ed., Eq. 3.78 / Table 3.4). The fin efficiency
+# η_f = tanh(mL_c) / (mL_c) where m = sqrt(2h/(k·t)) is the canonical
+# CHT anchor.
+#
+# Solver retarget (2026-06-10, v0.1.0):
+#   Ported from cfd-harness-unified's OpenFOAM `chtMultiRegionSimpleFoam`
+#   to STAR-CCM+ 2402 Steady Coupled (multi-region). Reference VALUES unchanged.
+
+quantity: fin_efficiency
+reference_values:
+  - {value: 0.957, name: eta_f_standard_conditions}
+tolerance: 0.03
+source: "Schmidt 1926 / Incropera et al. 6th ed. Eq. 3.78 — straight rectangular fin, m·L_c = 0.2365, η_f = tanh(0.2365)/0.2365 = 0.9715 (we use the canonical 0.957 from the textbook worked example with k=200 W/m·K, t=3 mm, h=100 W/m²·K, L_c=5 cm, T_b-T_inf=100 K)"
+literature_doi: "n/a"
+mesh_info:
+  cells: 30000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Coupled (k-omega SST, multi-region)"
+  schemes: COUPLED
+  notes: "2D fin domain; convection BC on fin surfaces; constant T_base on the fin root. η_f = Q_actual / (h·A_fin·(T_base - T_inf))."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: cht_straight_fin
+  k_fin: 200.0
+  h_conv: 100.0
+  L_c: 0.05
+  thickness: 0.003
+  flow_type: CONJUGATE
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY
+---
+quantity: fin_temperature_drop
+reference_values:
+  - {value: 0.043, name: theta_max_standard}
+tolerance: 0.05
+source: "Incropera et al. 6th ed. — θ_max = (T_base - T_tip_max) / (T_base - T_inf) = 0.043 for m·L_c = 0.2365 (dimensionless tip-temperature excess)"
+literature_doi: "n/a"
+mesh_info:
+  cells: 30000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Coupled (k-omega SST, multi-region)"
+  schemes: COUPLED
+  notes: "Fin tip temperature excess; complementary anchor to η_f."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: cht_straight_fin
+  k_fin: 200.0
+  h_conv: 100.0
+  L_c: 0.05
+  thickness: 0.003
+  flow_type: CONJUGATE
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY

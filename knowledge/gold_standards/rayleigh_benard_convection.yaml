@@ -1,0 +1,54 @@
+# Gold Standard — Rayleigh-Bénard Convection (STAR-CCM+ 2402 retarget)
+#
+# Based on Castaing, Gunaratne, Heslot, Kadanoff, Libchaber, Thomae,
+# Wu, Zaleski & Zanetti 1989, J. Fluid Mech. 204, 1-30 (helium-gas
+# experiment), and Niemela, Skrbek, Sreenivasan & Donnelly 2000, Nature
+# 404, 837-840 (the high-Ra extension).
+# The Nu-Ra scaling Nu = a·Ra^β is the canonical natural-convection
+# anchor. β ≈ 1/3 at moderate Ra (classic), β → 2/7 at ultra-high Ra.
+#
+# Solver retarget (2026-06-10, v0.1.0):
+#   Ported from cfd-harness-unified's OpenFOAM `buoyantBoussinesqPimpleFoam`
+#   to STAR-CCM+ 2402 Implicit Unsteady (Boussinesq). Reference VALUES unchanged.
+
+quantity: nusselt_scaling_exponent
+reference_values:
+  - {value: 0.31, name: beta_moderate_Ra}
+tolerance: 0.15
+source: "Castaing et al. 1989, J. Fluid Mech. 204, 1-30 — Ra=1e7..1e12, Nu ~ Ra^0.31 (the classic 1/3 scaling, slightly below 1/3 due to finite conductivity ratio)"
+literature_doi: "10.1017/S0022112089001609"
+mesh_info:
+  cells: 50000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Implicit Unsteady (Boussinesq)"
+  schemes: PISO
+  notes: "Aspect ratio 1.0; periodic horizontal; fixed T bottom/top. Nu time-averaged; the exponent beta is extracted by linear fit on log(Nu) vs log(Ra)."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: rayleigh_benard_convection
+  Ra_range: [1.0e5, 1.0e9]
+  flow_type: NATURAL_CONVECTION
+  geometry_type: SIMPLE_GRID
+  steady_state: UNSTEADY
+---
+quantity: nusselt_at_Ra1e6
+reference_values:
+  - {value: 8.7, name: Nu_Ra1e6}
+tolerance: 0.15
+source: "Castaing et al. 1989 / Niemela 2000 — Ra=1e6, Nu ≈ 8.7 (consensus across direct numerical simulations of unity-aspect-ratio RB cells)"
+literature_doi: "10.1017/S0022112089001609"
+mesh_info:
+  cells: 50000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Implicit Unsteady (Boussinesq)"
+  schemes: PISO
+  notes: "Single-Ra anchor; the more nuanced exponent test (quantity 1) is preferred for full V&V."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: rayleigh_benard_convection
+  Ra: 1.0e6
+  flow_type: NATURAL_CONVECTION
+  geometry_type: SIMPLE_GRID
+  steady_state: UNSTEADY

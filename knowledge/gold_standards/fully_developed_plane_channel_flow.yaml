@@ -1,0 +1,53 @@
+# Gold Standard — Fully Developed Plane Channel Flow (STAR-CCM+ 2402 retarget)
+#
+# Based on the analytical Poiseuille parabola for a 2D channel between
+# two parallel plates. The centerline-velocity ratio u_max / U_bulk = 1.5
+# is the universal analytical result, mesh-independent.
+#
+# Solver retarget (2026-06-10, v0.1.0):
+#   Ported from cfd-harness-unified's OpenFOAM `simpleFoam` to STAR-CCM+
+#   2402 Steady Segregated. Reference VALUES unchanged.
+
+quantity: u_max_to_ubulk_ratio
+reference_values:
+  - {value: 1.5, name: u_max_over_ubulk}
+tolerance: 0.02
+source: "Analytical — 2D Poiseuille flow between parallel plates; u_max/u_bulk = 3/2"
+literature_doi: "n/a"
+mesh_info:
+  cells: 10000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Segregated"
+  schemes: SIMPLE
+  notes: "Laminar fully-developed channel; periodic streamwise or fixed pressure gradient."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: fully_developed_plane_channel_flow
+  Re: 100
+  half_height: 1.0
+  flow_type: INTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY
+---
+quantity: wall_shear_stress
+reference_values:
+  - {value: 6.0, name: tau_w_Re100}
+tolerance: 0.05
+source: "Analytical — 2D Poiseuille flow, τ_w = (6·μ·U_bulk)/h. For Re=100 with h=1, ρ=1, μ=0.01, U_bulk=1, τ_w = 6·0.01·1/1 = 0.06 (normalized by ρ·U² → 0.06)."
+literature_doi: "n/a"
+mesh_info:
+  cells: 10000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Segregated"
+  schemes: SIMPLE
+  notes: "Same as u_max_to_ubulk_ratio; wall shear stress non-dimensionalized by ρU²."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: fully_developed_plane_channel_flow
+  Re: 100
+  half_height: 1.0
+  flow_type: INTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY

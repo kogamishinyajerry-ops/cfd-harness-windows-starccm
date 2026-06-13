@@ -1,0 +1,52 @@
+# Gold Standard — Turbulent Flat Plate (Zero Pressure Gradient) (STAR-CCM+ 2402 retarget)
+#
+# Based on Coles 1968 (Hama / Coles 1955-1968 wind-tunnel experiments)
+# — the canonical zero-pressure-gradient flat-plate skin-friction and
+# boundary-layer profile. Cf at Re_x is the primary anchor; the
+# log-region mean-velocity profile is the secondary anchor.
+#
+# Solver retarget (2026-06-10, v0.1.0):
+#   Ported from cfd-harness-unified's OpenFOAM `pimpleFoam` (RANS) to
+#   STAR-CCM+ 2402 Steady Coupled. Reference VALUES unchanged.
+
+quantity: skin_friction_cf
+reference_values:
+  - {value: 0.0047, name: cf_Re_x1e7}
+tolerance: 0.05
+source: "Coles 1968 (Hama 1957-1968) — Re_x=1e7, Cf = 0.0047 (Schlichting 1979 'boundary layer theory' Table 12.1)"
+literature_doi: "n/a"
+mesh_info:
+  cells: 80000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Coupled (k-omega SST)"
+  schemes: COUPLED
+  notes: "Zero pressure gradient flat plate. Cf sampled at the station where Re_x = 1e7; integrated from wall shear tau_w via Cf = tau_w / (0.5*rho*U_inf^2)."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: turbulent_flat_plate
+  Re_x: 1.0e7
+  flow_type: EXTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY
+---
+quantity: displacement_thickness_reynolds
+reference_values:
+  - {value: 3450, name: delta_1_reynolds_Re_x1e7}
+tolerance: 0.10
+source: "Coles 1968 / Schlichting 1979 Table 12.1 — Re_delta1 ≈ 3450 at Re_x=1e7"
+literature_doi: "n/a"
+mesh_info:
+  cells: 80000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Coupled (k-omega SST)"
+  schemes: COUPLED
+  notes: "Displacement thickness Reynolds number Re_δ1 = ρU∞δ1/μ. Secondary validation anchor."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: turbulent_flat_plate
+  Re_x: 1.0e7
+  flow_type: EXTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY

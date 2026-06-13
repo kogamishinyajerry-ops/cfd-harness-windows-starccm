@@ -1,0 +1,56 @@
+# Gold Standard — Plane Impinging Jet (STAR-CCM+ 2402 retarget)
+#
+# Based on Baughn, Hechanova & Yan 1992, J. Heat Transfer 114, 760-764
+# — heat transfer from a slot jet (2D plane jet, not axisymmetric).
+# Nusselt number vs. jet Re at H/W=4.
+#
+# Solver retarget (2026-06-10, v0.1.0):
+#   Ported from cfd-harness-unified's OpenFOAM `buoyantSimpleFoam` to
+#   STAR-CCM+ 2402 Steady Coupled. Reference VALUES unchanged.
+
+quantity: stagnation_nusselt
+reference_values:
+  - {value: 35.6, name: Nu0_Re8000_plane}
+tolerance: 0.10
+source: "Baughn, Hechanova & Yan 1992, J. Heat Transfer 114, 760-764 — plane slot jet H/W=4, Re=8000, Nu_0 ≈ 35.6"
+literature_doi: "10.1115/1.2911344"
+mesh_info:
+  cells: 60000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Coupled (k-omega SST)"
+  schemes: COUPLED
+  notes: "2D plane jet; H/W=4. Nu_0 sampled at the stagnation line. Distinct from the axisymmetric jet (axisymmetric_impinging_jet) which uses Jambunathan 1992."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: impinging_jet
+  Re: 8000
+  H_over_W: 4.0
+  flow_type: EXTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY
+---
+quantity: nusselt_radial_profile
+reference_values:
+  - {x_over_W: 0.0, Nu: 35.6}
+  - {x_over_W: 1.0, Nu: 28.0}
+  - {x_over_W: 2.0, Nu: 16.8}
+  - {x_over_W: 4.0, Nu: 6.4}
+tolerance: 0.15
+source: "Baughn et al. 1992 — streamwise Nu decay at Re=8000, H/W=4"
+literature_doi: "10.1115/1.2911344"
+mesh_info:
+  cells: 60000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Coupled (k-omega SST)"
+  schemes: COUPLED
+  notes: "Streamwise Nu profile; vector path (x/W is the coord key, Nu is the value)."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: impinging_jet
+  Re: 8000
+  H_over_W: 4.0
+  flow_type: EXTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY

@@ -1,0 +1,85 @@
+# =============================================================
+# Gold Standard · NASA Rotor 37 · CST Baseline Coefficients
+# =============================================================
+# 12 CST coefficients (6 lower Bernstein + 6 upper Bernstein) for the
+# baseline R37 airfoil, parameterized by Kulfan (2008) CST with N1=0.5,
+# N2=1.0 class-function exponents.
+#
+# IMPORTANT — provenance honesty (M3):
+# ------------------------------------------------------------
+# The 12 coefficients below are NOT directly digitized from Suder 1995
+# Table 4 (spanwise airfoil coordinates) — those coordinates are not in
+# the existing `knowledge/gold_standards/rotor37.yaml` and a direct fit
+# is a separate M3 sub-deliverable (M3-S3.2 deferred to M3-S4, see
+# `reports/research/commercial-fan-prop/planning/m3-cst-ffd-surrogate-roadmap.md`
+# §2.3).
+#
+# Instead, the coefficients are the **M3 cst.py module defaults**
+# (`cfd_harness.surrogate.cst.DEFAULT_LOWER / DEFAULT_UPPER`).
+# They approximate a ~12% thick, ~2% cambered transonic compressor section
+# (close to R37 mid-span) and are intended as the *first* LHS sample
+# (centroid of the design space) before any literature-validated fit.
+#
+# validation_status: mock_baseline (replace with `literature_fit` once
+# Suder 1995 Table 4 airfoil coordinates are digitized and a Bernstein
+# least-squares fit is performed).
+# =============================================================
+
+quantity: cst_coefficients_rotor37_baseline
+reference_values:
+  - value: [0.1186, 0.1181, 0.1561, 0.1454, 0.1500, 0.0500,    # A1..A6 lower
+            0.2222, 0.2872, 0.2810, 0.2798, 0.2718, 0.0500]    # A7..A12 upper
+    name: cst_A1_through_A12_rotor37_baseline
+tolerance: 0.05           # 5% relative on each coefficient; design-space spread
+                          # for transonic compressor sections is typically ±10-15%
+                          # on inner Bernstein terms, ±2-3% on the trailing-edge
+                          # terms (A6, A12). 5% is conservative for M3 LHS centroid.
+source: "M3 surrogate module default (cfd_harness.surrogate.cst.DEFAULT_LOWER /
+  DEFAULT_UPPER). Pending Suder 1995 ASME J. Turbomachinery 117(4):491-505
+  Table 4 airfoil-coordinate digitization + Bernstein least-squares fit."
+literature_doi: "10.1115/1.2836561"  # Suder 1995, to be cited after the fit
+validation_status: mock_baseline     # change to "literature_fit" after M3-S3.2
+mesh_info:
+  n_outline_points: 40   # 40 chordwise points per surface
+  class_function: {n1: 0.5, n2: 1.0}   # Kulfan 2008 default LE/TE exponents
+solver_info:
+  name: "CST (solver-agnostic) — cst.py"
+  schemes: "Bernstein basis, N1=0.5, N2=1.0"
+  notes: "Pure-Python CST parameterization. No solver coupling. Used to
+    generate 2D airfoil outline for downstream FFD/3D extrude."
+  platform: "Python 3.11 + numpy"
+case_info:
+  id: rotor37
+  flow_type: COMPRESSIBLE
+  geometry_type: PARAMETRIC_CST
+  steady_state: STEADY
+  operating_point: design_100pct_Suder1995
+  design_point:
+    pressure_ratio_total_to_total: 2.056
+    mass_flow_kg_s: 20.93
+    tip_speed_m_s: 454.0
+    rpm: 17188.7
+    tip_diameter_m: 0.737
+    n_blades: 36
+    source: "Moore & Reid 1980 NASA-TP-1659 + Suder 1995 ASME J. Turbomach."
+
+# LHS sampling bounds for the 12 variables (Step 5 uses these)
+lhs_bounds:
+  lower:
+    min: [0.05, 0.05, 0.05, 0.05, 0.05, 0.02]   # A1..A6 min
+    max: [0.25, 0.25, 0.30, 0.30, 0.30, 0.10]   # A1..A6 max
+  upper:
+    min: [0.10, 0.15, 0.15, 0.15, 0.15, 0.02]   # A7..A12 min
+    max: [0.35, 0.40, 0.40, 0.40, 0.40, 0.10]   # A7..A12 max
+  notes: "Bounds chosen to keep max-thickness in 5-15% chord range and
+    max-camber in -2..+5% range across the LHS samples. Inner Bernstein
+    terms (A2..A5 lower, A8..A11 upper) are allowed more variance than
+    TE terms (A6, A12) to reflect physical plausibility."
+
+provenance:
+  derived_from: "M3 cst.py module defaults; literature-validated values
+    pending Suder 1995 Table 4 digitization (M3-S3.2 deferred)."
+  cross_reference: "knowledge/gold_standards/rotor37.yaml (14 quantity
+    performance baseline); reports/research/commercial-fan-prop/planning/
+    m3-cst-ffd-surrogate-roadmap.md §2.3"
+  license: "Public domain (NASA) + ASME archival (Suder 1995)"

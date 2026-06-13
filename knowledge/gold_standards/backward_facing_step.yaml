@@ -1,0 +1,32 @@
+# Gold Standard — Backward-Facing Step (STAR-CCM+ 2402 retarget)
+#
+# Based on Armaly, Durst, Pereira & Schönung 1983, J. Fluid Mech. 127, 473-496.
+# Re_H (Reynolds number based on step height H) is the canonical parameter.
+# Reattachment length X_r / H varies with Re; we anchor Re=600.
+# Steady-state, incompressible, k-omega SST.
+#
+# Solver retarget (2026-06-10, v0.1.0):
+#   Ported from cfd-harness-unified's OpenFOAM `simpleFoam` to STAR-CCM+
+#   2402 Steady Segregated. Reference VALUES unchanged.
+
+quantity: reattachment_length_ratio
+reference_values:
+  - {value: 6.10, name: Xr_over_H}
+tolerance: 0.05
+source: "Armaly, Durst, Pereira & Schönung 1983, J. Fluid Mech. 127, 473-496 — Re_H=600, Xr/H experimental"
+literature_doi: "10.1017/S0022112083001119"
+mesh_info:
+  cells: 80000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Steady Segregated"
+  schemes: SIMPLE
+  notes: "Migrated from cfd-harness-unified OpenFOAM simpleFoam. Expansion ratio ER=2; inlet uniform U_in. Reattachment length extracted from the streamwise position where wall shear tau_w crosses zero on the lower wall downstream of the step."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: backward_facing_step
+  Re: 600
+  expansion_ratio: 2.0
+  flow_type: INTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: STEADY

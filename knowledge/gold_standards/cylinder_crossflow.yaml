@@ -1,0 +1,57 @@
+# Gold Standard — Cylinder in Crossflow (STAR-CCM+ 2402 retarget)
+#
+# This case is a near-duplicate of `circular_cylinder_wake` (Williamson
+# 1996) but at a HIGHER Re (Re=3900) where the wake is fully turbulent
+# and Cd / St values differ from the Re=200 anchor. We keep it as a
+# separate yaml so the harness can serve "low-Re laminar wake" vs
+# "high-Re sub-critical wake" as two distinct V&V anchors.
+#
+# Solver retarget (2026-06-10, v0.1.0):
+#   Ported from cfd-harness-unified's OpenFOAM `pimpleFoam` to STAR-CCM+
+#   2402 Implicit Unsteady. Reference VALUES unchanged.
+
+quantity: strouhal_number
+reference_values:
+  - {value: 0.215, name: St_Re3900}
+tolerance: 0.05
+source: "Williamson 1996, Annu. Rev. Fluid Mech. 28, 477-539 — Re=3900, St ≈ 0.215 (sub-critical vortex shedding)"
+literature_doi: "10.1146/annurev.fluid.28.1.477"
+mesh_info:
+  cells: 80000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Implicit Unsteady (k-omega SST)"
+  schemes: PISO
+  notes: "Re=3900 sub-critical; LES-grade mesh 80k. Cd/Cl time-averaged over 20+ shedding cycles."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: cylinder_crossflow
+  Re: 3900
+  diameter: 1.0
+  freestream_u: 1.0
+  flow_type: EXTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: UNSTEADY
+---
+quantity: cd_mean
+reference_values:
+  - {value: 0.98, name: cd_Re3900}
+tolerance: 0.10
+source: "Williamson 1996 — Re=3900, time-averaged Cd ≈ 0.98 (broad literature range 0.90-1.05; canonical Williamson value 0.98)"
+literature_doi: "10.1146/annurev.fluid.28.1.477"
+mesh_info:
+  cells: 80000
+  type: structured
+solver_info:
+  name: "STAR-CCM+ 2402 Implicit Unsteady (k-omega SST)"
+  schemes: PISO
+  notes: "Same as strouhal_number; Cd time-averaged."
+  platform: "Windows + Codebuddy REPL"
+case_info:
+  id: cylinder_crossflow
+  Re: 3900
+  diameter: 1.0
+  freestream_u: 1.0
+  flow_type: EXTERNAL
+  geometry_type: SIMPLE_GRID
+  steady_state: UNSTEADY

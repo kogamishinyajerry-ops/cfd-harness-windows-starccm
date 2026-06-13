@@ -22,6 +22,10 @@ class VerifierReport:
     is_validated: bool
     comparison_all_pass: bool
     comparison_failing: List[str] = field(default_factory=list)
+    # Full per-quantity detail (name/measured/gold/relative_error/tolerance/
+    # all_pass) so the citable report can show real deviation magnitudes
+    # instead of em-dashes. Solver-agnostic; not part of the SIGNED manifest.
+    comparison_quantities: List[Dict[str, Any]] = field(default_factory=list)
     convergence_all_pass: bool = False
     convergence_failing: List[str] = field(default_factory=list)
     physics_all_pass: bool = False

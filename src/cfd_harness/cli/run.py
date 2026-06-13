@@ -299,6 +299,17 @@ def main(argv: Optional[list] = None) -> int:
         is_validated=verdict.is_validated,
         comparison_all_pass=verdict.comparison.all_pass,
         comparison_failing=list(verdict.comparison.failing_quantities),
+        comparison_quantities=[
+            {
+                "name": q.name,
+                "measured": q.measured,
+                "gold": q.gold,
+                "relative_error": q.relative_error,
+                "tolerance": q.tolerance,
+                "all_pass": q.all_pass,
+            }
+            for q in verdict.comparison.quantities
+        ],
         convergence_all_pass=verdict.convergence.all_pass,
         convergence_failing=list(verdict.convergence.failing_fields),
         physics_all_pass=verdict.physics.all_pass,

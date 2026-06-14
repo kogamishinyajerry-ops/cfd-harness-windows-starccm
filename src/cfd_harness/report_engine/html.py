@@ -227,8 +227,15 @@ def render_html_report(
     # cases the field plots carry no valid data — surface that honestly
     # rather than presenting empty contours as real results.
     stale = bool(kq.get("postprocess_stale"))
+    # A verified non-zero field (e.g. velocity_max from a report) means the run
+    # is NOT quiescent even if residual monitors weren't exported.
+    real_field = False
+    try:
+        real_field = float(kq.get("velocity_max", 0) or 0) > 1e-9
+    except (TypeError, ValueError):
+        real_field = False
     quiescent = (bool(kq.get("force_reports_zero")) or bool(kq.get("fields_quiescent"))
-                 or stale or (not residuals and not is_mock))
+                 or stale or (not residuals and not is_mock)) and not real_field
     floor = 1e-4  # display reference; the actual gate floor lives in thresholds
 
     # ---- convergence SVG ----

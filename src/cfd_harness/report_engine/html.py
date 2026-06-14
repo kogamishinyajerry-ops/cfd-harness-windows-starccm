@@ -220,6 +220,11 @@ def render_html_report(
 
     gold = _gold_targets(Path(gold_path) if gold_path else None)
     residuals = er.get("residuals", {}) or {}
+    kq = er.get("key_quantities", {}) or {}
+    # A run whose force/field reports come back ~0 is a quiescent (no-flow)
+    # solve — the field plots will be blank/single-colour. Surface that
+    # honestly rather than presenting empty contours as real results.
+    quiescent = bool(kq.get("force_reports_zero")) or bool(kq.get("fields_quiescent"))
     floor = 1e-4  # display reference; the actual gate floor lives in thresholds
 
     # ---- convergence SVG ----
@@ -296,6 +301,14 @@ def render_html_report(
                         f'<figcaption>{_esc(caption)}</figcaption></figure>')
     img_grid = f'<div class="grid">{"".join(imgs)}</div>' if imgs else \
         '<p class="muted">(未提供场景图)</p>'
+    scene_warning = ""
+    if quiescent:
+        scene_warning = (
+            '<div class="banner" style="background:#ffebe9;border-color:#cf222e">'
+            '⚠ <b>本次求解的力与场近似为零</b>(velocity≈0 m/s · pressure≈0 Pa · force=0)。'
+            '下列云图<b>无有效流动数据</b> —— 解为空(全场静止,无涡街),部分场景甚至未绑定场函数'
+            '(图例显示 <code>&lt;Select Function&gt;</code>)。这是 STAR-CCM+ 2402 R8 该算例'
+            '解为空 / 力·场读取受限(DEC-005)所致,<b>不是报告渲染问题</b>。</div>')
 
     notes = " · ".join(_esc(n) for n in (run.get("notes") or []))
     gen_at = generated_at or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
@@ -370,6 +383,7 @@ footer{{color:var(--mut);font-size:12px;margin-top:24px;text-align:center}}
 
 <section>
 <h2>🖼 场景可视化 scene fields</h2>
+{scene_warning}
 {img_grid}
 </section>
 

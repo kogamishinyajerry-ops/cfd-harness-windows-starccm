@@ -58,6 +58,18 @@ def test_render_writes_self_contained_html(tmp_path):
     assert "http://" not in html and "https://" not in html
 
 
+def test_render_flags_quiescent_fields(tmp_path):
+    """A zero-flow run (force_reports_zero) must warn that the cloud plots
+    carry no real field data — not present blank contours as results."""
+    p = _data(tmp_path)
+    d = json.loads(p.read_text(encoding="utf-8"))
+    d["run_report"]["execution_result"]["key_quantities"] = {"force_reports_zero": True}
+    p.write_text(json.dumps(d), encoding="utf-8")
+    html = render_html_report(p).read_text(encoding="utf-8")
+    assert "无有效流动数据" in html
+    assert "Select Function" in html
+
+
 def test_render_embeds_convergence_and_png(tmp_path):
     # convergence.json with a residual history
     conv = tmp_path / "conv.json"

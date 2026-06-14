@@ -67,6 +67,27 @@ def test_absent_postprocess_leaves_residuals_empty(tmp_path):
     assert any("postprocess=absent" in n for n in rep.notes)
 
 
+def test_stale_postprocess_is_ignored(tmp_path):
+    """A postprocess.json from an EARLIER run (older mtime) must NOT be
+    attributed to this run — residuals stay empty, flagged postprocess_stale."""
+    import os
+    import time
+    sim = tmp_path / "cyl.sim"
+    sim.write_text("", encoding="utf-8")
+    _write_pp(sim, {
+        "monitors": {"items": [{"name": "Continuity", "type": "ResidualMonitor", "last": 1e-5}]},
+        "drag_lift": {"Fx": 0.0, "Fy": 0.0, "Fz": 0.0},
+    })
+    pp = sim.parent / "Results" / "cyl_postprocess.json"
+    old = time.time() - 3600  # 1 hour ago
+    os.utime(pp, (old, old))
+    ex = StarCCMExecutor(codebuddy_path=str(tmp_path))
+    rep = ex._build_run_report(_resp({}), sim)  # _resp.elapsed_s=10.6 → run_start≈now
+    assert rep.execution_result.residuals == {}
+    assert rep.execution_result.key_quantities.get("postprocess_stale") is True
+    assert any("postprocess=stale" in n for n in rep.notes)
+
+
 def test_response_residuals_take_precedence(tmp_path):
     sim = tmp_path / "cyl.sim"
     sim.write_text("", encoding="utf-8")

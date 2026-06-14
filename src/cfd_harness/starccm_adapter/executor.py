@@ -380,8 +380,17 @@ class StarCCMExecutor(ExecutorAbc):
         # "no residuals → diverged".
         pp_note = "postprocess=absent"
         if not residuals:
-            pp_residuals, pp_kq = self._residuals_from_postprocess(sim_path)
-            if pp_residuals or pp_kq:
+            # Only trust a postprocess file that THIS run actually wrote —
+            # the vortex-street command does not always regenerate it, and a
+            # stale file from an earlier run must NOT be laundered as this
+            # run's residuals. run_start ≈ now − spawn duration.
+            import time as _time
+            run_start = _time.time() - float(resp.elapsed_s or 0.0)
+            pp_residuals, pp_kq = self._residuals_from_postprocess(sim_path, min_mtime=run_start)
+            if pp_kq.get("postprocess_stale"):
+                key_quantities = {**key_quantities, **pp_kq}
+                pp_note = "postprocess=stale(ignored)"
+            elif pp_residuals or pp_kq:
                 residuals = pp_residuals or residuals
                 key_quantities = {**key_quantities, **pp_kq}
                 pp_note = f"postprocess=read(residuals={len(pp_residuals)})"
@@ -445,15 +454,21 @@ class StarCCMExecutor(ExecutorAbc):
         return out
 
     @staticmethod
-    def _residuals_from_postprocess(sim_path: Path) -> tuple:
+    def _residuals_from_postprocess(sim_path: Path, min_mtime: float = 0.0) -> tuple:
         """Read real residuals + force reports from a vortex-street / run
         ``<stem>_postprocess.json`` (written to ``Cases/Results``).
 
         Returns ``(residuals, key_quantities)``; both empty if the file is
-        absent/unreadable. Residuals are taken FAITHFULLY from every
-        ResidualMonitor's last value (no cherry-picking — the convergence
-        floor then applies uniformly). Force reports (``drag_lift``) are
-        surfaced as ``force_Fx/Fy/Fz``; if all are ~0 they are flagged
+        absent/unreadable. If ``min_mtime`` is given and the file predates it
+        (a stale file from an earlier run — the command did not regenerate
+        it), residuals are NOT returned and ``key_quantities`` carries
+        ``postprocess_stale=True`` so the caller never attributes old data to
+        this run.
+
+        Residuals are taken FAITHFULLY from every ResidualMonitor's last
+        value (no cherry-picking — the convergence floor then applies
+        uniformly). Force reports (``drag_lift``) are surfaced as
+        ``force_Fx/Fy/Fz``; if all are ~0 they are flagged
         ``force_reports_zero`` — STAR-CCM+'s report binding returns a
         sentinel here (see DEC-005), so they must NOT be trusted as real
         drag/lift.
@@ -461,6 +476,13 @@ class StarCCMExecutor(ExecutorAbc):
         pp_path = sim_path.parent / "Results" / f"{sim_path.stem}_postprocess.json"
         if not pp_path.exists():
             return {}, {}
+        try:
+            mtime = pp_path.stat().st_mtime
+        except OSError:
+            return {}, {}
+        # 10 s slack absorbs clock/parse jitter; a file older than the run is stale.
+        if min_mtime and mtime < min_mtime - 10.0:
+            return {}, {"postprocess_stale": True, "postprocess_source": pp_path.name}
         try:
             import json as _json
             pp = _json.loads(pp_path.read_text(encoding="utf-8"))

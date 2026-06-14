@@ -222,9 +222,13 @@ def render_html_report(
     residuals = er.get("residuals", {}) or {}
     kq = er.get("key_quantities", {}) or {}
     # A run whose force/field reports come back ~0 is a quiescent (no-flow)
-    # solve — the field plots will be blank/single-colour. Surface that
-    # honestly rather than presenting empty contours as real results.
-    quiescent = bool(kq.get("force_reports_zero")) or bool(kq.get("fields_quiescent"))
+    # solve; a stale/absent postprocess or empty residuals on a real solver
+    # means there is no trustworthy fresh field for THIS run. In all these
+    # cases the field plots carry no valid data — surface that honestly
+    # rather than presenting empty contours as real results.
+    stale = bool(kq.get("postprocess_stale"))
+    quiescent = (bool(kq.get("force_reports_zero")) or bool(kq.get("fields_quiescent"))
+                 or stale or (not residuals and not is_mock))
     floor = 1e-4  # display reference; the actual gate floor lives in thresholds
 
     # ---- convergence SVG ----
@@ -303,12 +307,15 @@ def render_html_report(
         '<p class="muted">(未提供场景图)</p>'
     scene_warning = ""
     if quiescent:
+        stale_note = ("本次运行未写出新鲜的后处理残差(postprocess 为上次运行的陈旧文件,已忽略);"
+                      if stale else "")
         scene_warning = (
             '<div class="banner" style="background:#ffebe9;border-color:#cf222e">'
-            '⚠ <b>本次求解的力与场近似为零</b>(velocity≈0 m/s · pressure≈0 Pa · force=0)。'
-            '下列云图<b>无有效流动数据</b> —— 解为空(全场静止,无涡街),部分场景甚至未绑定场函数'
-            '(图例显示 <code>&lt;Select Function&gt;</code>)。这是 STAR-CCM+ 2402 R8 该算例'
-            '解为空 / 力·场读取受限(DEC-005)所致,<b>不是报告渲染问题</b>。</div>')
+            '⚠ <b>本次求解未产出有效的流动场</b>:velocity≈0 m/s · pressure≈0 Pa · force=0'
+            '(全场静止,无涡街)。' + stale_note +
+            '下列云图<b>无有效流动数据</b> —— 部分场景甚至未绑定场函数'
+            '(图例显示 <code>&lt;Select Function&gt;</code>)。根因是 STAR-CCM+ 2402 R8 '
+            '该算例<b>解为空 / 力·场读取受限(DEC-005)</b>,<b>不是报告渲染问题</b>。</div>')
 
     notes = " · ".join(_esc(n) for n in (run.get("notes") or []))
     gen_at = generated_at or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")

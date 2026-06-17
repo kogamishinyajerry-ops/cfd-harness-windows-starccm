@@ -1,0 +1,36 @@
+{
+  "case": "nasa_rotor37_single_passage_rans",
+  "geometry_source": "Deeplabs-ai/rotor37 sample 0 (baseline NASA Rotor 37), verified vs Reid&Moore 1978",
+  "rotation_axis": "z",
+  "blade_count": 36,
+  "pitch_deg": 10.0,
+  "rpm": 17188.7,
+  "omega_rad_s": 1799.996,
+  "tip_clearance_m": 0.000356,
+  "fluid_volume_m3": 0.0005233862439104004,
+  "z_inlet_m": -0.04920339584350586,
+  "z_outlet_m": 0.1533508151769638,
+  "inlet_total_pressure_pa": 101325.0,
+  "inlet_total_temperature_k": 288.15,
+  "outlet_static_pressure_pa_initial": 115000.0,
+  "design": {
+    "pressure_ratio": 2.106,
+    "adiabatic_efficiency": 0.876,
+    "mass_flow_kg_s": 20.19,
+    "choke_mass_flow_kg_s": 20.93
+  },
+  "boundaries": [
+    "inlet",
+    "outlet",
+    "hub",
+    "shroud",
+    "blade",
+    "per1",
+    "per2"
+  ],
+  "wall_roles": {
+    "hub": "rotating_with_frame",
+    "blade": "rotating_with_frame",
+    "shroud": "counter_rotating_absolute_stationary"
+  }
+}

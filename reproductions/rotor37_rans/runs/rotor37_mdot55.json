@@ -1,0 +1,22 @@
+{
+  "case": "nasa_rotor37_single_passage_rans",
+  "elapsed_sec": 2877.1,
+  "omega_rad_s": 1800.0,
+  "p_out_pa": 115000.0,
+  "base_size_m": 0.004,
+  "iters": 1500,
+  "cell_count": 541620,
+  "mesh_ok": true,
+  "mrf_ok": true,
+  "periodic_ok": true,
+  "p0_in_pa": 113730.63847157292,
+  "p0_out_pa": 74445.48229879505,
+  "t0_in_k": 301.3809323199353,
+  "t0_out_k": 300.0,
+  "mdot_passage_kg_s": -0.548704772236379,
+  "mdot_full_kg_s": 19.753371800509644,
+  "pressure_ratio_tt": 0.6545771948462487,
+  "total_temp_ratio": 0.9954179837811724,
+  "isentropic_efficiency": 24.887147747769262,
+  "smoke_ok": true
+}

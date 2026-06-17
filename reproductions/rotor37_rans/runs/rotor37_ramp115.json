@@ -1,0 +1,13 @@
+{
+  "case": "nasa_rotor37_single_passage_rans",
+  "elapsed_sec": 763.7,
+  "omega_rad_s": 1800.0,
+  "p_out_pa": 115000.0,
+  "base_size_m": 0.004,
+  "iters": 600,
+  "cell_count": 541620,
+  "mesh_ok": true,
+  "mrf_ok": true,
+  "periodic_ok": true,
+  "smoke_ok": false
+}
